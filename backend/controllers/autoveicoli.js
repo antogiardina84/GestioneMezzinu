@@ -1,106 +1,186 @@
-const Autoveicolo = require('../models/Autoveicolo');
+// backend/controllers/autoveicoli.js - CONTROLLER COMPLETO CON PASS ZTL
+const fs = require('fs');
 const path = require('path');
-const fs = require('fs').promises;
+const Autoveicolo = require('../models/Autoveicolo');
+const { normalizePathForUrl } = require ('../middleware/fileUpload');
+// Funzione helper per calcolare la prossima revisione basata sul tipo di carrozzeria
+const calcolaProssimaRevisione = (autoveicolo) => {
+  const intervalliRevisione = {
+    'Autovettura': { anni: 4, poi: 2 },
+    'Motoveicolo': { anni: 4, poi: 2 },
+    'Van': { anni: 4, poi: 2 },
+    'Cassonato': { anni: 1, poi: 1 },
+    'Trattore stradale < 3.5 ton': { anni: 4, poi: 2 },
+    'Trattore stradale > 3.5 ton': { anni: 1, poi: 1 },
+    'Semirimorchio': { anni: 1, poi: 1 },
+    'Rimorchio < 3.5 ton': { anni: 4, poi: 2 },
+    'Rimorchio > 3.5 ton': { anni: 1, poi: 1 }
+  };
 
-const { normalizePathForUrl } = require('../middleware/fileUpload');
+  const dataImmatricolazione = new Date(autoveicolo.dataImmatricolazione);
+  const ultimaRevisione = autoveicolo.ultimaRevisione ? new Date(autoveicolo.ultimaRevisione) : null;
+  const intervallo = intervalliRevisione[autoveicolo.tipoCarrozzeria] || { anni: 2, poi: 2 };
 
-// @desc    Get all autoveicoli
+  let prossimaRevisione;
+  let tipoRevisione;
+
+  if (ultimaRevisione) {
+    prossimaRevisione = new Date(ultimaRevisione);
+    prossimaRevisione.setFullYear(prossimaRevisione.getFullYear() + intervallo.poi);
+    tipoRevisione = intervallo.poi === 1 ? 'Annuale' : 'Biennale/Quadriennale';
+  } else {
+    prossimaRevisione = new Date(dataImmatricolazione);
+    prossimaRevisione.setFullYear(prossimaRevisione.getFullYear() + intervallo.anni);
+    tipoRevisione = intervallo.anni === 1 ? 'Annuale' : (intervallo.anni === 4 ? 'Quadriennale' : 'Biennale');
+  }
+
+  return { data: prossimaRevisione, tipo: tipoRevisione };
+};
+
+// @desc    Get all autoveicoli with advanced pagination and search
 // @route   GET /api/autoveicoli
 // @access  Private
-exports.getAutoveicoli = async (req, res, next) => {
+exports.getAutoveicoli = async (req, res) => {
   try {
-    let query;
+    let query = {};
 
-    // Copy req.query
-    const reqQuery = { ...req.query };
-
-    // Fields to exclude
-    const removeFields = ['select', 'sort', 'page', 'limit', 'search'];
-
-    // Loop over removeFields and delete them from reqQuery
-    removeFields.forEach((param) => delete reqQuery[param]);
-
-    // Create query string
-    let queryStr = JSON.stringify(reqQuery);
-
-    // Create operators ($gt, $gte, etc)
-    queryStr = queryStr.replace(
-      /\b(gt|gte|lt|lte|in)\b/g,
-      (match) => `$${match}`
-    );
-
-    // Parse the query
-    let filterQuery = JSON.parse(queryStr);
-
-    // Add search functionality
+    // RICERCA AVANZATA
     if (req.query.search) {
-      filterQuery.$or = [
-        { targa: new RegExp(req.query.search, 'i') },
-        { marca: new RegExp(req.query.search, 'i') },
-        { modello: new RegExp(req.query.search, 'i') }
+      const searchRegex = new RegExp(req.query.search, 'i');
+      query.$or = [
+        { marca: searchRegex },
+        { modello: searchRegex },
+        { targa: searchRegex },
+        { telaio: searchRegex },
+        { autista: searchRegex },
+        { compagniaAssicurazione: searchRegex },
+        { numeroPolizzaAssicurazione: searchRegex },
+        { note: searchRegex }
       ];
     }
 
-    // Finding resource
-    query = Autoveicolo.find(filterQuery);
-
-    // Select Fields
-    if (req.query.select) {
-      const fields = req.query.select.split(',').join(' ');
-      query = query.select(fields);
+    // FILTRI SPECIFICI
+    if (req.query.stato) {
+      query.stato = req.query.stato;
     }
 
-    // Sort
-    if (req.query.sort) {
-      const sortBy = req.query.sort.split(',').join(' ');
-      query = query.sort(sortBy);
-    } else {
-      query = query.sort('-createdAt');
+    if (req.query.tipoCarrozzeria) {
+      query.tipoCarrozzeria = req.query.tipoCarrozzeria;
     }
 
-    // Pagination
+    if (req.query.tipologiaAcquisto) {
+      query.tipologiaAcquisto = req.query.tipologiaAcquisto;
+    }
+
+    if (req.query.marca) {
+      query.marca = new RegExp(req.query.marca, 'i');
+    }
+
+    if (req.query.autista) {
+      query.autista = new RegExp(req.query.autista, 'i');
+    }
+
+    // FILTRI BOOLEANI
+    if (req.query.esenteBollo !== undefined) {
+      query.esenteBollo = req.query.esenteBollo === 'true';
+    }
+
+    if (req.query.passZTL !== undefined) {
+      query.passZTL = req.query.passZTL === 'true';
+    }
+
+    if (req.query.conAutRifiuti !== undefined) {
+      if (req.query.conAutRifiuti === 'true') {
+        query.autRifiuti = { $exists: true, $ne: [] };
+      }
+    }
+
+    // CONFIGURAZIONE PAGINAZIONE
     const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const total = await Autoveicolo.countDocuments(filterQuery);
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const maxLimit = 500;
+    
+    const finalLimit = Math.min(limit, maxLimit);
+    const startIndex = (page - 1) * finalLimit;
 
-    query = query.skip(startIndex).limit(limit);
-
-    // Populate references
-    query = query.populate('iscrizioneANGA');
-
-    // Executing query
-    const autoveicoli = await query;
-
-    // Pagination result
-    const pagination = {};
-
-    if (endIndex < total) {
-      pagination.next = {
-        page: page + 1,
-        limit
+    // ORDINAMENTO DINAMICO
+    let sortOptions = {};
+    if (req.query.sortBy) {
+      const sortOrder = req.query.sortOrder === 'desc' ? -1 : 1;
+      sortOptions[req.query.sortBy] = sortOrder;
+    } else {
+      sortOptions = { 
+        stato: 1,
+        dataImmatricolazione: -1
       };
     }
 
-    if (startIndex > 0) {
+    // ESECUZIONE QUERY
+    const autoveicoli = await Autoveicolo.find(query)
+      .sort(sortOptions)
+      .limit(finalLimit)
+      .skip(startIndex)
+      .lean();
+
+    const total = await Autoveicolo.countDocuments(query);
+
+    // INFORMAZIONI PAGINAZIONE
+    const totalPages = Math.ceil(total / finalLimit);
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page > 1;
+    
+    const pagination = {
+      currentPage: page,
+      totalPages,
+      totalItems: total,
+      itemsPerPage: finalLimit,
+      hasNextPage,
+      hasPrevPage,
+      startIndex: startIndex + 1,
+      endIndex: Math.min(startIndex + finalLimit, total)
+    };
+
+    if (hasNextPage) {
+      pagination.next = {
+        page: page + 1,
+        limit: finalLimit
+      };
+    }
+
+    if (hasPrevPage) {
       pagination.prev = {
         page: page - 1,
-        limit
+        limit: finalLimit
       };
     }
 
     res.status(200).json({
       success: true,
-      count: total,
+      count: autoveicoli.length,
+      total,
       pagination,
+      filters: {
+        search: req.query.search || null,
+        stato: req.query.stato || null,
+        tipoCarrozzeria: req.query.tipoCarrozzeria || null,
+        tipologiaAcquisto: req.query.tipologiaAcquisto || null,
+        esenteBollo: req.query.esenteBollo || null,
+        passZTL: req.query.passZTL || null,
+        conAutRifiuti: req.query.conAutRifiuti || null
+      },
+      sort: {
+        sortBy: req.query.sortBy || 'stato,dataImmatricolazione',
+        sortOrder: req.query.sortOrder || 'asc,desc'
+      },
       data: autoveicoli
     });
+
   } catch (err) {
     console.error('Errore get autoveicoli:', err);
     res.status(500).json({
       success: false,
-      error: 'Errore del server'
+      error: 'Errore del server',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 };
@@ -108,11 +188,11 @@ exports.getAutoveicoli = async (req, res, next) => {
 // @desc    Get single autoveicolo
 // @route   GET /api/autoveicoli/:id
 // @access  Private
-exports.getAutoveicolo = async (req, res, next) => {
+exports.getAutoveicolo = async (req, res) => {
   try {
-    const autoveicolo = await Autoveicolo.findById(req.params.id).populate(
-      'iscrizioneANGA'
-    );
+    const autoveicolo = await Autoveicolo.findById(req.params.id)
+      .populate('iscrizioneANGA')
+      .populate('autRifiuti');
 
     if (!autoveicolo) {
       return res.status(404).json({
@@ -137,14 +217,8 @@ exports.getAutoveicolo = async (req, res, next) => {
 // @desc    Create new autoveicolo
 // @route   POST /api/autoveicoli
 // @access  Private/Admin
-exports.createAutoveicolo = async (req, res, next) => {
+exports.createAutoveicolo = async (req, res) => {
   try {
-    console.log('=== DEBUG BACKEND CREATE ===');
-    console.log('Dati ricevuti:', req.body);
-    console.log('Tipo carrozzeria:', req.body.tipoCarrozzeria);
-    console.log('Cilindrata:', req.body.cilindrata);
-    console.log('KW:', req.body.kw);
-
     const autoveicolo = await Autoveicolo.create(req.body);
 
     res.status(201).json({
@@ -152,15 +226,10 @@ exports.createAutoveicolo = async (req, res, next) => {
       data: autoveicolo
     });
   } catch (err) {
-    console.error('=== ERRORE BACKEND CREATE ===');
-    console.error('Errore completo:', err);
-    console.error('Validation errors:', err.errors);
-    console.error('Error message:', err.message);
-
     res.status(400).json({
       success: false,
       error: err.message,
-      details: err.errors // Aggiungi dettagli errori di validazione
+      details: err.errors
     });
   }
 };
@@ -168,7 +237,7 @@ exports.createAutoveicolo = async (req, res, next) => {
 // @desc    Update autoveicolo
 // @route   PUT /api/autoveicoli/:id
 // @access  Private/Admin
-exports.updateAutoveicolo = async (req, res, next) => {
+exports.updateAutoveicolo = async (req, res) => {
   try {
     const autoveicolo = await Autoveicolo.findByIdAndUpdate(
       req.params.id,
@@ -202,7 +271,7 @@ exports.updateAutoveicolo = async (req, res, next) => {
 // @desc    Delete autoveicolo
 // @route   DELETE /api/autoveicoli/:id
 // @access  Private/Admin
-exports.deleteAutoveicolo = async (req, res, next) => {
+exports.deleteAutoveicolo = async (req, res) => {
   try {
     const autoveicolo = await Autoveicolo.findById(req.params.id);
 
@@ -216,7 +285,7 @@ exports.deleteAutoveicolo = async (req, res, next) => {
     // Delete all associated files
     for (const allegato of autoveicolo.allegati) {
       try {
-        await fs.unlink(allegato.percorsoFile);
+        await fs.promises.unlink(allegato.percorsoFile);
       } catch (err) {
         console.error(`Errore eliminazione file: ${err.message}`);
       }
@@ -237,10 +306,7 @@ exports.deleteAutoveicolo = async (req, res, next) => {
   }
 };
 
-// @desc    Upload allegati for autoveicolo
-// @route   POST /api/autoveicoli/:id/allegati
-// @access  Private/Admin
-exports.uploadAllegati = async (req, res, next) => {
+exports.uploadAllegati = async (req, res) => {
   try {
     const autoveicolo = await Autoveicolo.findById(req.params.id);
 
@@ -258,14 +324,12 @@ exports.uploadAllegati = async (req, res, next) => {
       });
     }
 
-    // Process uploaded files
     const nuoviAllegati = req.files.map((file) => ({
       nomeFile: file.originalname,
       percorsoFile: normalizePathForUrl(file.path),
       tipo: req.body.tipo || 'Altro'
     }));
 
-    // Add files to autoveicolo
     autoveicolo.allegati.push(...nuoviAllegati);
     await autoveicolo.save();
 
@@ -285,63 +349,34 @@ exports.uploadAllegati = async (req, res, next) => {
 // @desc    Delete allegato
 // @route   DELETE /api/autoveicoli/:id/allegati/:allegatoId
 // @access  Private/Admin
-exports.deleteAllegato = async (req, res, next) => {
+exports.deleteAllegato = async (req, res) => {
   try {
-    console.log('Ricevuta richiesta di eliminazione allegato:', {
-      entityId: req.params.id,
-      allegatoId: req.params.allegatoId
-    });
-
     const autoveicolo = await Autoveicolo.findById(req.params.id);
 
     if (!autoveicolo) {
-      console.log('Autoveicolo non trovato:', req.params.id);
       return res.status(404).json({
         success: false,
         message: 'Autoveicolo non trovato'
       });
     }
 
-    // Verifica se l'allegato esiste
     const allegato = autoveicolo.allegati.id(req.params.allegatoId);
 
     if (!allegato) {
-      console.log('Allegato non trovato:', req.params.allegatoId);
       return res.status(404).json({
         success: false,
         message: 'Allegato non trovato'
       });
     }
 
-    // Stampa i dettagli dell'allegato che stiamo per eliminare
-    console.log('Allegato trovato:', {
-      _id: allegato._id,
-      nomeFile: allegato.nomeFile,
-      percorsoFile: allegato.percorsoFile
-    });
-
-    // Elimina il file dal filesystem
     try {
-      await fs.unlink(allegato.percorsoFile);
-      console.log('File eliminato dal filesystem:', allegato.percorsoFile);
+      await fs.promises.unlink(allegato.percorsoFile);
     } catch (err) {
       console.error('Errore eliminazione file:', err.message);
-      // Continuiamo comunque a eliminare il riferimento nel database
     }
 
-    // IMPORTANTE: Non usare allegato.remove() - è deprecato
-    // Usa il metodo pull per rimuovere l'elemento dall'array
     autoveicolo.allegati.pull(req.params.allegatoId);
-
-    console.log(
-      'Nuova lista allegati:',
-      autoveicolo.allegati.length,
-      'elementi'
-    );
-
-    // Salviamo le modifiche
     await autoveicolo.save();
-    console.log('Autoveicolo salvato con successo dopo rimozione allegato');
 
     res.status(200).json({
       success: true,
@@ -358,131 +393,211 @@ exports.deleteAllegato = async (req, res, next) => {
   }
 };
 
-// Funzione helper per calcolare la prossima revisione basata sul tipo di carrozzeria
-const calcolaProssimaRevisione = (autoveicolo) => {
-  const intervalli = autoveicolo.getIntervallorevisione();
+// @desc    Download allegato
+// @route   GET /api/autoveicoli/:id/allegati/:allegatoId/download
+// @access  Private
+exports.downloadAllegato = async (req, res) => {
+  try {
+    const autoveicolo = await Autoveicolo.findById(req.params.id);
 
-  if (autoveicolo.ultimaRevisione) {
-    // Se ha fatto almeno una revisione, calcola la prossima in base al tipo
-    const ultimaRevisionData = new Date(autoveicolo.ultimaRevisione);
-    const prossima = new Date(ultimaRevisionData);
-    prossima.setFullYear(
-      ultimaRevisionData.getFullYear() + intervalli.revisioniSuccessive
-    );
-    return prossima;
-  } else {
-    // Se non ha mai fatto revisione, la prima è calcolata dall'immatricolazione
-    const immatricolazioneData = new Date(autoveicolo.dataImmatricolazione);
-    const prossima = new Date(immatricolazioneData);
-    prossima.setFullYear(
-      immatricolazioneData.getFullYear() + intervalli.primaRevisione
-    );
-    return prossima;
+    if (!autoveicolo) {
+      return res.status(404).json({
+        success: false,
+        message: 'Autoveicolo non trovato'
+      });
+    }
+
+    const allegato = autoveicolo.allegati.id(req.params.allegatoId);
+
+    if (!allegato) {
+      return res.status(404).json({
+        success: false,
+        message: 'Allegato non trovato'
+      });
+    }
+
+    if (!fs.existsSync(allegato.percorsoFile)) {
+      return res.status(404).json({
+        success: false,
+        message: 'File fisico non trovato'
+      });
+    }
+
+    const ext = path.extname(allegato.nomeFile).toLowerCase();
+    
+    switch (ext) {
+    case '.pdf':
+      res.header('Content-Type', 'application/pdf');
+      break;
+    case '.jpg':
+    case '.jpeg':
+      res.header('Content-Type', 'image/jpeg');
+      break;
+    case '.png':
+      res.header('Content-Type', 'image/png');
+      break;
+    case '.doc':
+      res.header('Content-Type', 'application/msword');
+      break;
+    case '.docx':
+      res.header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      break;
+    case '.xls':
+      res.header('Content-Type', 'application/vnd.ms-excel');
+      break;
+    case '.xlsx':
+      res.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      break;
+    default:
+      res.header('Content-Type', 'application/octet-stream');
+    }
+
+    res.header('Content-Disposition', `attachment; filename="${allegato.nomeFile}"`);
+    res.sendFile(path.resolve(allegato.percorsoFile));
+
+  } catch (err) {
+    console.error('Errore downloadAllegato:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Errore del server',
+      details: err.message
+    });
   }
 };
 
-// @desc    Get scadenze for autoveicoli
+// @desc    Get scadenze autoveicoli - AGGIORNATO CON PASS ZTL
 // @route   GET /api/autoveicoli/scadenze/all
 // @access  Private
-exports.getScadenze = async (req, res, next) => {
+exports.getScadenze = async (req, res) => {
   try {
-    const oggi = new Date();
+    const query = req.query.includiGuasti === 'true' 
+      ? { stato: { $in: ['Attivo', 'Veicolo Guasto'] } }
+      : { stato: 'Attivo' };
 
-    const autoveicoli = await Autoveicolo.find({ stato: 'Attivo' }).populate(
-      'iscrizioneANGA'
-    );
+    const autoveicoli = await Autoveicolo.find(query);
 
     const scadenze = {
       revisioni: [],
       bolli: [],
       assicurazioni: [],
-      titoloProprieta: []
+      titoloProprieta: [],
+      passZTL: []
     };
 
+    const oggi = new Date();
+    oggi.setHours(0, 0, 0, 0);
+
     autoveicoli.forEach((auto) => {
-      // Revisioni - Usa la nuova logica basata sul tipo di carrozzeria
-      const prossimaRevisione = calcolaProssimaRevisione(auto);
+      const skipScadenze = auto.stato === 'Veicolo Guasto' && req.query.includiGuasti !== 'true';
 
-      // Determina il periodo di controllo in base al tipo di veicolo
-      const intervalli = auto.getIntervallorevisione();
-      let periodoControllo;
-
-      if (intervalli.revisioniSuccessive === 1) {
-        // Per veicoli con revisione annuale, controlla fino a 2 mesi prima
-        periodoControllo = new Date(oggi.getTime() + 60 * 24 * 60 * 60 * 1000);
-      } else {
-        // Per veicoli con revisione biennale/quadriennale, controlla fino a 1 anno prima
-        periodoControllo = new Date(oggi.getTime() + 365 * 24 * 60 * 60 * 1000);
-      }
-
-      if (prossimaRevisione <= periodoControllo) {
-        const giorni = Math.floor(
-          (prossimaRevisione - oggi) / (1000 * 60 * 60 * 24)
+      if (!skipScadenze) {
+        // Revisioni
+        const revisioneInfo = calcolaProssimaRevisione(auto);
+        const giorniRevisione = Math.floor(
+          (revisioneInfo.data - oggi) / (1000 * 60 * 60 * 24)
         );
-        scadenze.revisioni.push({
-          autoveicolo: auto,
-          data: prossimaRevisione,
-          urgent: giorni <= 0,
-          giorni: giorni,
-          tipoRevisione:
-            intervalli.revisioniSuccessive === 1
-              ? 'Annuale'
-              : 'Biennale/Quadriennale'
-        });
-      }
-
-      // Bolli
-      const unMese = new Date(oggi.getTime() + 30 * 24 * 60 * 60 * 1000);
-      const giorniBollu = Math.floor(
-        (auto.dataScadenzaBollo - oggi) / (1000 * 60 * 60 * 24)
-      );
-      if (giorniBollu <= 30) {
-        scadenze.bolli.push({
-          autoveicolo: auto,
-          data: auto.dataScadenzaBollo,
-          urgent: giorniBollu <= 0,
-          giorni: giorniBollu
-        });
-      }
-
-      // Assicurazioni
-      const giorniAssicurazione = Math.floor(
-        (auto.dataScadenzaAssicurazione - oggi) / (1000 * 60 * 60 * 24)
-      );
-      if (giorniAssicurazione <= 30) {
-        scadenze.assicurazioni.push({
-          autoveicolo: auto,
-          data: auto.dataScadenzaAssicurazione,
-          urgent: giorniAssicurazione <= 0,
-          giorni: giorniAssicurazione
-        });
-      }
-
-      // Titolo Proprietà
-      if (auto.scadenzaTitoloProprietà) {
-        const seiMesi = new Date(oggi.getTime() + 180 * 24 * 60 * 60 * 1000);
-        const giorniTitolo = Math.floor(
-          (auto.scadenzaTitoloProprietà - oggi) / (1000 * 60 * 60 * 24)
-        );
-        if (giorniTitolo <= 180) {
-          scadenze.titoloProprieta.push({
+        if (giorniRevisione <= 30) {
+          scadenze.revisioni.push({
             autoveicolo: auto,
-            data: auto.scadenzaTitoloProprietà,
-            urgent: giorniTitolo <= 90,
-            giorni: giorniTitolo
+            data: revisioneInfo.data,
+            urgent: giorniRevisione <= 0,
+            giorni: giorniRevisione,
+            tipoRevisione: revisioneInfo.tipo
+          });
+        }
+
+        // Bolli (solo se non esente)
+        if (auto.dataScadenzaBollo && !auto.esenteBollo) {
+          const giorniBollu = Math.floor(
+            (auto.dataScadenzaBollo - oggi) / (1000 * 60 * 60 * 24)
+          );
+          if (giorniBollu <= 30) {
+            scadenze.bolli.push({
+              autoveicolo: auto,
+              data: auto.dataScadenzaBollo,
+              urgent: giorniBollu <= 0,
+              giorni: giorniBollu
+            });
+          }
+        }
+
+        // Assicurazioni
+        if (auto.dataScadenzaAssicurazione) {
+          const giorniAssicurazione = Math.floor(
+            (auto.dataScadenzaAssicurazione - oggi) / (1000 * 60 * 60 * 24)
+          );
+          if (giorniAssicurazione <= 30) {
+            scadenze.assicurazioni.push({
+              autoveicolo: auto,
+              data: auto.dataScadenzaAssicurazione,
+              urgent: giorniAssicurazione <= 0,
+              giorni: giorniAssicurazione
+            });
+          }
+        }
+
+        // Titolo Proprietà
+        if (auto.scadenzaTitoloProprietà) {
+          const giorniTitolo = Math.floor(
+            (auto.scadenzaTitoloProprietà - oggi) / (1000 * 60 * 60 * 24)
+          );
+          if (giorniTitolo <= 180) {
+            scadenze.titoloProprieta.push({
+              autoveicolo: auto,
+              data: auto.scadenzaTitoloProprietà,
+              urgent: giorniTitolo <= 90,
+              giorni: giorniTitolo
+            });
+          }
+        }
+      }
+
+      // Pass ZTL - Controlliamo sempre, anche per veicoli guasti
+      if (auto.passZTL && auto.dataScadenzaPassZTL) {
+        const giorniPassZTL = Math.floor(
+          (auto.dataScadenzaPassZTL - oggi) / (1000 * 60 * 60 * 24)
+        );
+        if (giorniPassZTL <= 60) {
+          scadenze.passZTL.push({
+            autoveicolo: auto,
+            data: auto.dataScadenzaPassZTL,
+            urgent: giorniPassZTL <= 0,
+            giorni: giorniPassZTL,
+            statoVeicolo: auto.stato,
+            livelloUrgenza: giorniPassZTL <= 0 ? 'scaduto' : 
+              giorniPassZTL <= 7 ? 'critico' :
+                giorniPassZTL <= 30 ? 'urgente' : 'avviso'
           });
         }
       }
     });
 
-    // Sort by date
     Object.keys(scadenze).forEach((key) => {
       scadenze[key].sort((a, b) => a.data - b.data);
     });
 
+    const statistiche = {
+      totaleScadenze: Object.values(scadenze).reduce((total, categoria) => total + categoria.length, 0),
+      scadute: Object.values(scadenze).reduce((total, categoria) => 
+        total + categoria.filter(item => item.urgent).length, 0
+      ),
+      passZTL: {
+        totale: scadenze.passZTL.length,
+        scaduti: scadenze.passZTL.filter(item => item.livelloUrgenza === 'scaduto').length,
+        critici: scadenze.passZTL.filter(item => item.livelloUrgenza === 'critico').length,
+        urgenti: scadenze.passZTL.filter(item => item.livelloUrgenza === 'urgente').length,
+        avvisi: scadenze.passZTL.filter(item => item.livelloUrgenza === 'avviso').length
+      }
+    };
+
     res.status(200).json({
       success: true,
-      data: scadenze
+      data: scadenze,
+      statistiche,
+      parametri: {
+        includiGuasti: req.query.includiGuasti === 'true',
+        dataControllo: oggi
+      }
     });
   } catch (err) {
     console.error('Errore get scadenze:', err);
@@ -493,14 +608,73 @@ exports.getScadenze = async (req, res, next) => {
   }
 };
 
+// @desc    Get scadenze Pass ZTL specifiche
+// @route   GET /api/autoveicoli/scadenze/pass-ztl
+// @access  Private
+exports.getScadenzePassZTL = async (req, res) => {
+  try {
+    const oggi = new Date();
+    oggi.setHours(0, 0, 0, 0);
+
+    const autoveicoli = await Autoveicolo.find({
+      passZTL: true,
+      dataScadenzaPassZTL: { $exists: true }
+    }).select('marca modello targa passZTL dataScadenzaPassZTL stato autista');
+
+    const scadenzePassZTL = autoveicoli.map(auto => {
+      const giorni = Math.floor(
+        (auto.dataScadenzaPassZTL - oggi) / (1000 * 60 * 60 * 24)
+      );
+
+      return {
+        autoveicolo: auto,
+        data: auto.dataScadenzaPassZTL,
+        giorni,
+        urgent: giorni <= 0,
+        livelloUrgenza: giorni <= 0 ? 'scaduto' : 
+          giorni <= 7 ? 'critico' :
+            giorni <= 30 ? 'urgente' : 'normale',
+        messaggio: giorni <= 0 ? 'Pass ZTL SCADUTO' :
+          giorni <= 7 ? `Pass ZTL scade tra ${giorni} giorni - CRITICO` :
+            giorni <= 30 ? `Pass ZTL scade tra ${giorni} giorni` :
+              `Pass ZTL scade tra ${giorni} giorni`
+      };
+    });
+
+    scadenzePassZTL.sort((a, b) => {
+      if (a.urgent !== b.urgent) return b.urgent - a.urgent;
+      return a.data - b.data;
+    });
+
+    res.status(200).json({
+      success: true,
+      count: scadenzePassZTL.length,
+      data: scadenzePassZTL,
+      statistiche: {
+        scaduti: scadenzePassZTL.filter(item => item.livelloUrgenza === 'scaduto').length,
+        critici: scadenzePassZTL.filter(item => item.livelloUrgenza === 'critico').length,
+        urgenti: scadenzePassZTL.filter(item => item.livelloUrgenza === 'urgente').length,
+        normali: scadenzePassZTL.filter(item => item.livelloUrgenza === 'normale').length
+      }
+    });
+
+  } catch (err) {
+    console.error('Errore get scadenze Pass ZTL:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Errore del server'
+    });
+  }
+};
+
 // @desc    Update stato autoveicolo
 // @route   PUT /api/autoveicoli/:id/stato
 // @access  Private/Admin
-exports.updateStato = async (req, res, next) => {
+exports.updateStato = async (req, res) => {
   try {
     const { stato } = req.body;
 
-    if (!['Attivo', 'Chiuso', 'Venduto', 'Demolito'].includes(stato)) {
+    if (!['Attivo', 'Venduto', 'Demolito', 'Chiuso', 'Veicolo Guasto'].includes(stato)) {
       return res.status(400).json({
         success: false,
         message: 'Stato non valido'
@@ -510,10 +684,7 @@ exports.updateStato = async (req, res, next) => {
     const autoveicolo = await Autoveicolo.findByIdAndUpdate(
       req.params.id,
       { stato },
-      {
-        new: true,
-        runValidators: true
-      }
+      { new: true, runValidators: true }
     );
 
     if (!autoveicolo) {
@@ -539,23 +710,18 @@ exports.updateStato = async (req, res, next) => {
 // @desc    Demolisci autoveicolo
 // @route   PUT /api/autoveicoli/:id/demolisci
 // @access  Private/Admin
-exports.demolisciAutoveicolo = async (req, res, next) => {
+exports.demolisciAutoveicolo = async (req, res) => {
   try {
-    const { datiDemolitore, dataDemolizione } = req.body;
+    const { dataDemolizione, datiDemolitore } = req.body;
 
     const autoveicolo = await Autoveicolo.findByIdAndUpdate(
       req.params.id,
       {
         stato: 'Demolito',
-        datiDemolizione: {
-          datiDemolitore,
-          dataDemolizione: dataDemolizione || new Date()
-        }
+        dataDemolizione: new Date(dataDemolizione),
+        datiDemolitore
       },
-      {
-        new: true,
-        runValidators: true
-      }
+      { new: true, runValidators: true }
     );
 
     if (!autoveicolo) {
@@ -581,15 +747,15 @@ exports.demolisciAutoveicolo = async (req, res, next) => {
 // @desc    Vendi autoveicolo
 // @route   PUT /api/autoveicoli/:id/vendi
 // @access  Private/Admin
-exports.vendiAutoveicolo = async (req, res, next) => {
+exports.vendiAutoveicolo = async (req, res) => {
   try {
     const autoveicolo = await Autoveicolo.findByIdAndUpdate(
       req.params.id,
-      { stato: 'Venduto' },
       {
-        new: true,
-        runValidators: true
-      }
+        stato: 'Venduto',
+        dataVendita: new Date()
+      },
+      { new: true, runValidators: true }
     );
 
     if (!autoveicolo) {

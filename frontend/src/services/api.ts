@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// Ottieni URL API dall'env o usa default
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5555/api';
+// Ottieni URL API dall'env e aggiungi /api
+const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5555';
+const API_URL = `${BASE_URL}/api`;
 
 console.log('===============================');
 console.log('API URL configurato:', API_URL);
@@ -14,24 +15,17 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  // Disabilita withCredentials poiché stiamo usando Authorization header
   withCredentials: false
 });
 
-// Interceptor per gestire path errati
+// Interceptor per le richieste
 api.interceptors.request.use(
   (config) => {
-    // Correggi il percorso dei test: da /api/test a /test
-    if (config.url === '/api/test') {
-      console.log('Correzione percorso da /api/test a /test');
-      config.url = '/test';
-    }
-    
     console.log(`📤 Request [${config.method?.toUpperCase()}] ${config.url}`, config.data || '');
     const token = localStorage.getItem('token');
     
     if (token && config.headers) {
-      console.log('Utilizzo token:', token.substring(0, 10) + '...');
+      console.log('Utilizzo token:', token.substring(0, 20) + '...');
       config.headers.Authorization = `Bearer ${token}`;
     }
     
@@ -43,19 +37,17 @@ api.interceptors.request.use(
   }
 );
 
-// Aggiungi log dettagliati alle risposte
+// Interceptor per le risposte
 api.interceptors.response.use(
   (response) => {
-    console.log(`📥 Response [${response.status}] ${response.config.url}`, response.data || '');
+    console.log(`📥 Response [${response.status}] ${response.config.url}`, response.data);
     return response;
   },
   (error) => {
     console.error('📛 API Error:', error.response?.status, error.response?.data || error.message);
     
-    // Log dettagliato per errori di connessione
     if (!error.response) {
       console.error('❌ Network Error - Impossibile connettersi al server:', API_URL);
-      console.error('Dettagli errore:', error);
     }
     
     if (error.response?.status === 401) {

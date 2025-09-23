@@ -1,4 +1,4 @@
-// src/config/apiConfig.ts - Configurazione API
+// src/config/apiConfig.ts - Configurazione API CORRETTA
 export const API_CONFIG = {
   // URL base dell'API
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5555',
@@ -39,14 +39,14 @@ export const API_CONFIG = {
   }
 };
 
-// Funzione helper per costruire URL completi
+// Funzione helper per costruire URL completi API
 export const buildApiUrl = (endpoint: string): string => {
   const baseUrl = API_CONFIG.baseURL.replace(/\/$/, ''); // Rimuovi trailing slash
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   return `${baseUrl}${cleanEndpoint}`;
 };
 
-// Funzione helper per costruire URL dei file
+// Funzione helper per costruire URL dei file - VERSIONE CORRETTA
 export const buildFileUrl = (filePath: string): string => {
   if (!filePath) return '';
   
@@ -68,7 +68,9 @@ export const buildFileUrl = (filePath: string): string => {
     }
   }
   
-  return buildApiUrl(`/${normalizedPath}`);
+  // IMPORTANTE: Per i file statici NON usare /api/
+  const baseUrl = API_CONFIG.baseURL.replace(/\/$/, '');
+  return `${baseUrl}/${normalizedPath}`;
 };
 
 // Funzione per verificare se un file esiste

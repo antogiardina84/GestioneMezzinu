@@ -1,5 +1,10 @@
-// backend/routes/autoveicoli.js - VERSIONE AGGIORNATA per permettere operazioni agli utenti
+// backend/routes/autoveicoli.js
 const express = require('express');
+const router = express.Router();
+const { protect, authorize } = require('../middleware/auth');
+const { uploadFiles, handleMulterError } = require('../middleware/fileUpload');
+
+// Importa TUTTE le funzioni dal controller
 const {
   getAutoveicoli,
   getAutoveicolo,
@@ -8,51 +13,58 @@ const {
   deleteAutoveicolo,
   uploadAllegati,
   deleteAllegato,
+  downloadAllegato,
   getScadenze,
+  getScadenzePassZTL,
   updateStato,
   demolisciAutoveicolo,
   vendiAutoveicolo
 } = require('../controllers/autoveicoli');
 
-const router = express.Router();
-
-const { protect, authorize } = require('../middleware/auth');
-const { uploadFiles, handleMulterError } = require('../middleware/fileUpload');
-
-// Tutte le routes sono protette (richiedono login)
+// Tutte le routes sono protette
 router.use(protect);
 
-// ROUTES ACCESSIBILI A TUTTI GLI UTENTI AUTENTICATI
-router
-  .route('/')
-  .get(getAutoveicoli)                    //  Tutti possono leggere
-  .post(createAutoveicolo);               //  Tutti possono creare
+// ============================================
+// ROUTES PER SCADENZE (più specifiche - vanno prima)
+// ============================================
 
-router
-  .route('/:id')
-  .get(getAutoveicolo)                    //  Tutti possono leggere
-  .put(updateAutoveicolo)                 //  Tutti possono aggiornare
-  .delete(authorize('admin'), deleteAutoveicolo); //  Solo admin possono eliminare
+router.get('/scadenze/all', getScadenze);
+router.get('/scadenze/pass-ztl', getScadenzePassZTL);
 
-// Routes per gli allegati - ACCESSIBILI A TUTTI
-router.post(
-  '/:id/allegati',
-  uploadFiles,
-  handleMulterError,
-  uploadAllegati                          //  Tutti possono caricare allegati
-);
+// ============================================
+// ROUTES BASE PER AUTOVEICOLI
+// ============================================
 
-router.delete(
-  '/:id/allegati/:allegatoId',
-  deleteAllegato                          //  Tutti possono eliminare allegati
-);
+router.get('/', getAutoveicoli);
+router.post('/', createAutoveicolo);
 
-// Routes per le scadenze - ACCESSIBILI A TUTTI
-router.get('/scadenze/all', getScadenze); //  Tutti possono vedere scadenze
+// ============================================
+// ROUTES PER ALLEGATI (specifiche - prima di /:id)
+// ============================================
 
-// ROUTES RISERVATE AGLI ADMIN (operazioni critiche)
-router.put('/:id/stato', authorize('admin'), updateStato);
-router.put('/:id/demolisci', authorize('admin'), demolisciAutoveicolo);
-router.put('/:id/vendi', authorize('admin'), vendiAutoveicolo);
+// Upload allegati
+router.post('/:id/allegati', uploadFiles, handleMulterError, uploadAllegati);
+
+// Download allegato
+router.get('/:id/allegati/:allegatoId/download', downloadAllegato);
+
+// Delete allegato
+router.delete('/:id/allegati/:allegatoId', deleteAllegato);
+
+// ============================================
+// ROUTES PER GESTIONE STATO
+// ============================================
+
+router.put('/:id/stato', updateStato);
+router.put('/:id/demolisci', demolisciAutoveicolo);
+router.put('/:id/vendi', vendiAutoveicolo);
+
+// ============================================
+// ROUTES GENERICHE CON :id (vanno alla fine)
+// ============================================
+
+router.get('/:id', getAutoveicolo);
+router.put('/:id', updateAutoveicolo);
+router.delete('/:id', authorize('admin'), deleteAutoveicolo);
 
 module.exports = router;

@@ -1,4 +1,4 @@
-// backend/models/Autoveicolo.js - VERSIONE AGGIORNATA
+// backend/models/Autoveicolo.js - VERSIONE AGGIORNATA CON PASS ZTL
 const mongoose = require('mongoose');
 
 const AllegatoSchema = new mongoose.Schema({
@@ -37,7 +37,6 @@ const AutoveicoloSchema = new mongoose.Schema({
     min: [0, 'La cilindrata non può essere negativa'],
     validate: {
       validator: function (value) {
-        // Se è un rimorchio/semirimorchio, accetta anche 0
         if (
           [
             'Semirimorchio',
@@ -47,7 +46,6 @@ const AutoveicoloSchema = new mongoose.Schema({
         ) {
           return value >= 0;
         }
-        // Per altri tipi, deve essere maggiore di 0 SOLO se il veicolo ha un motore
         return value >= 0;
       },
       message: 'La cilindrata deve essere maggiore di 0 per i veicoli a motore'
@@ -59,7 +57,6 @@ const AutoveicoloSchema = new mongoose.Schema({
     min: [0, 'I Kw non possono essere negativi'],
     validate: {
       validator: function (value) {
-        // Se è un rimorchio/semirimorchio, accetta anche 0
         if (
           [
             'Semirimorchio',
@@ -69,7 +66,6 @@ const AutoveicoloSchema = new mongoose.Schema({
         ) {
           return value >= 0;
         }
-        // Per altri tipi, deve essere maggiore di 0 SOLO se il veicolo ha un motore
         return value >= 0;
       },
       message: 'I Kw devono essere maggiori di 0 per i veicoli a motore'
@@ -117,11 +113,9 @@ const AutoveicoloSchema = new mongoose.Schema({
   dataScadenzaBollo: {
     type: Date,
     required: function () {
-      // Il bollo è obbligatorio solo se il veicolo non è esente
       return !this.esenteBollo;
     }
   },
-  // NUOVO CAMPO: Esenzione bollo
   esenteBollo: {
     type: Boolean,
     default: false
@@ -147,7 +141,7 @@ const AutoveicoloSchema = new mongoose.Schema({
   }],
   stato: {
     type: String,
-    enum: ['Attivo', 'Chiuso', 'Venduto', 'Demolito'],
+    enum: ['Attivo', 'Chiuso', 'Venduto', 'Demolito', 'Veicolo Guasto'],
     default: 'Attivo'
   },
   allegati: [AllegatoSchema],
@@ -155,7 +149,6 @@ const AutoveicoloSchema = new mongoose.Schema({
     datiDemolitore: String,
     dataDemolizione: Date
   },
-  // NUOVI CAMPI AGGIUNTI
   telaio: {
     type: String,
     trim: true
@@ -183,6 +176,14 @@ const AutoveicoloSchema = new mongoose.Schema({
   passZTL: {
     type: Boolean,
     default: false
+  },
+  // NUOVO CAMPO: Data scadenza Pass ZTL
+  dataScadenzaPassZTL: {
+    type: Date,
+    required: function () {
+      // La data di scadenza è obbligatoria solo se il Pass ZTL è attivo
+      return this.passZTL === true;
+    }
   },
   autRifiuti: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -219,7 +220,6 @@ AutoveicoloSchema.methods.isMotorVehicle = function () {
 AutoveicoloSchema.pre('save', function (next) {
   // Validazione condizionale per cilindrata e kw
   if (this.isMotorVehicle()) {
-    // Per veicoli a motore, cilindrata e kw devono essere > 0
     if (this.cilindrata <= 0) {
       return next(new Error('La cilindrata deve essere maggiore di 0 per i veicoli a motore'));
     }
@@ -227,7 +227,6 @@ AutoveicoloSchema.pre('save', function (next) {
       return next(new Error('I Kw devono essere maggiori di 0 per i veicoli a motore'));
     }
   } else {
-    // Per rimorchi/semirimorchi, imposta cilindrata e kw a 0
     this.cilindrata = 0;
     this.kw = 0;
   }
@@ -242,9 +241,18 @@ AutoveicoloSchema.pre('save', function (next) {
     return next(new Error('La data di scadenza del bollo è obbligatoria per veicoli non esenti'));
   }
 
-  // Se il veicolo è esente dal bollo, rimuovi la data scadenza bollo
   if (this.esenteBollo) {
     this.dataScadenzaBollo = undefined;
+  }
+
+  // NUOVA VALIDAZIONE: Pass ZTL e data scadenza
+  if (this.passZTL && !this.dataScadenzaPassZTL) {
+    return next(new Error('La data di scadenza del Pass ZTL è obbligatoria quando il Pass ZTL è attivo'));
+  }
+
+  // Se il Pass ZTL non è attivo, rimuovi la data scadenza
+  if (!this.passZTL) {
+    this.dataScadenzaPassZTL = undefined;
   }
 
   next();
@@ -254,12 +262,10 @@ AutoveicoloSchema.pre('save', function (next) {
 AutoveicoloSchema.pre('findOneAndUpdate', function (next) {
   const update = this.getUpdate();
   
-  // Se stiamo aggiornando il tipo di carrozzeria, verifichiamo cilindrata e kw
   if (update.tipoCarrozzeria) {
     const isMotor = !['Semirimorchio', 'Rimorchio < 3.5 ton', 'Rimorchio > 3.5 ton'].includes(update.tipoCarrozzeria);
     
     if (!isMotor) {
-      // Per rimorchi/semirimorchi, imposta cilindrata e kw a 0
       update.cilindrata = 0;
       update.kw = 0;
     }
@@ -268,6 +274,12 @@ AutoveicoloSchema.pre('findOneAndUpdate', function (next) {
   // Gestione esenzione bollo
   if (update.esenteBollo === true) {
     update.dataScadenzaBollo = undefined;
+  }
+
+  // NUOVA GESTIONE: Pass ZTL
+  if (update.passZTL === false) {
+    // Se si disattiva il Pass ZTL, rimuovi la data scadenza
+    update.dataScadenzaPassZTL = undefined;
   }
 
   next();
@@ -279,6 +291,8 @@ AutoveicoloSchema.index({ stato: 1 });
 AutoveicoloSchema.index({ tipoCarrozzeria: 1 });
 AutoveicoloSchema.index({ dataScadenzaBollo: 1 });
 AutoveicoloSchema.index({ dataScadenzaAssicurazione: 1 });
+AutoveicoloSchema.index({ dataScadenzaPassZTL: 1 }); // Nuovo indice per Pass ZTL
+AutoveicoloSchema.index({ passZTL: 1 }); // Nuovo indice per Pass ZTL
 AutoveicoloSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Autoveicolo', AutoveicoloSchema);

@@ -1,4 +1,4 @@
-// src/components/common/FileAttachmentViewer.tsx
+// src/components/common/FileAttachmentViewer.tsx - VERSIONE FINALE CORRETTA
 import React, { useState } from 'react';
 import {
   List,
@@ -32,8 +32,8 @@ import {
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
+import API_CONFIG from '../../config/apiConfig';
 
-// Interfaccia per gli allegati
 export interface Attachment {
   _id: string;
   nomeFile: string;
@@ -45,19 +45,21 @@ export interface Attachment {
 interface FileAttachmentViewerProps {
   attachments: Attachment[];
   title?: string;
-  baseUrl?: string;
   canDelete?: boolean;
   onDelete?: (attachmentId: string) => Promise<void>;
   emptyMessage?: string;
+  entityType?: 'autoveicolo' | 'alboGestori' | 'ren';
+  entityId?: string;
 }
 
 const FileAttachmentViewer: React.FC<FileAttachmentViewerProps> = ({
   attachments,
   title = "Allegati",
-  baseUrl = 'http://192.168.1.253:5555',
   canDelete = false,
   onDelete,
-  emptyMessage = "Nessun allegato caricato"
+  emptyMessage = "Nessun allegato caricato",
+  entityType = 'autoveicolo',
+  entityId
 }) => {
   const [selectedFile, setSelectedFile] = useState<Attachment | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -91,150 +93,60 @@ const FileAttachmentViewer: React.FC<FileAttachmentViewerProps> = ({
     return format(new Date(date), 'dd/MM/yyyy', { locale: it });
   };
 
-  // FUNZIONE CORRETTA per normalizzare i percorsi
-  const getFileUrl = (percorsoFile: string) => {
-    console.log('🔧 Percorso originale:', percorsoFile);
-    
-    if (!percorsoFile) {
-      console.error('❌ Percorso file vuoto');
-      return '';
+  // Funzione per costruire l'URL del file STATICO
+const buildStaticFileUrl = (percorsoFile: string): string => {
+  if (!percorsoFile) return '';
+  
+  // Normalizza il percorso
+  let normalizedPath = percorsoFile.replace(/\\/g, '/');
+  
+  // Assicurati che inizi con 'uploads/'
+  if (!normalizedPath.startsWith('uploads/')) {
+    const uploadsIndex = normalizedPath.indexOf('uploads/');
+    if (uploadsIndex >= 0) {
+      normalizedPath = normalizedPath.substring(uploadsIndex);
+    } else {
+      normalizedPath = `uploads/${normalizedPath}`;
     }
-    
-    // STEP 1: Normalizza i separatori di percorso (sostituisce TUTTI i \ con /)
-    let normalizedPath = percorsoFile.replace(/\\/g, '/');
-    console.log('🔧 Dopo sostituzione backslash:', normalizedPath);
-    
-    // STEP 2: Se il percorso non inizia con 'uploads/', aggiungilo
-    if (!normalizedPath.startsWith('uploads/')) {
-      // Cerca la parte "uploads" nel percorso e prendi tutto da lì
-      const uploadsIndex = normalizedPath.indexOf('uploads');
-      if (uploadsIndex > 0) {
-        normalizedPath = normalizedPath.substring(uploadsIndex);
-        console.log('🔧 Estratto da uploads index:', normalizedPath);
-      } else if (!normalizedPath.includes('uploads')) {
-        // Se non trova "uploads" affatto, assumiamo che sia un percorso relativo
-        normalizedPath = `uploads/${normalizedPath}`;
-        console.log('🔧 Aggiunto prefisso uploads:', normalizedPath);
-      }
-    }
-    
-    // STEP 3: DOPPIO CONTROLLO - rimuovi eventuali backslash rimasti
-    normalizedPath = normalizedPath.replace(/\\/g, '/');
-    
-    // STEP 4: Rimuovi doppie slash (eccetto dopo http:)
-    normalizedPath = normalizedPath.replace(/([^:])\/\/+/g, '$1/');
-    
-    const finalUrl = `${baseUrl}/${normalizedPath}`;
-    console.log('✅ URL finale generato:', finalUrl);
-    
-    return finalUrl;
-  };
+  }
+  
+  // Costruisci l'URL SENZA /api/
+  const baseUrl = API_CONFIG.baseURL.replace(/\/$/, '');
+  const finalUrl = `${baseUrl}/${normalizedPath}`;
+  
+  console.log('🔗 buildStaticFileUrl:', percorsoFile, '->', finalUrl);
+  return finalUrl;
+};
 
   const handleView = (attachment: Attachment) => {
     const extension = attachment.nomeFile.split('.').pop()?.toLowerCase();
-    const fileUrl = getFileUrl(attachment.percorsoFile);
     
-    console.log('👁️ Apertura file:', {
-      nome: attachment.nomeFile,
-      percorsoOriginale: attachment.percorsoFile,
-      urlGenerato: fileUrl,
-      extension: extension
-    });
-    
-    if (extension === 'pdf') {
-      // Per i PDF, prova sempre ad aprire in una nuova finestra
-      console.log('📄 Apertura PDF in nuova finestra');
-      const pdfWindow = window.open(fileUrl, '_blank', 'width=1000,height=800,scrollbars=yes,resizable=yes');
-      
-      if (!pdfWindow) {
-        console.warn('⚠️ Popup bloccato, provo metodo alternativo');
-        // Se il popup è bloccato, usa il metodo di download
-        handleDownload(attachment);
-      } else {
-        console.log('✅ PDF aperto in nuova finestra');
-      }
-    } else if (['jpg', 'jpeg', 'png', 'gif'].includes(extension || '')) {
-      // Per le immagini, prova prima il dialog, poi fallback
-      try {
-        setSelectedFile(attachment);
-        setViewerOpen(true);
-        console.log('🖼️ Immagine aperta nel dialog');
-      } catch (error) {
-        console.log('🔄 Errore dialog, apertura in nuova finestra');
-        window.open(fileUrl, '_blank');
-      }
+    if (extension === 'pdf' || ['jpg', 'jpeg', 'png', 'gif'].includes(extension || '')) {
+      setSelectedFile(attachment);
+      setViewerOpen(true);
     } else {
-      // Per altri tipi di file, forza il download
-      console.log('📁 File non visualizzabile, avvio download');
       handleDownload(attachment);
     }
   };
+
   const handleCloseViewer = () => {
     setViewerOpen(false);
     setSelectedFile(null);
   };
 
-
   const handleDownload = (attachment: Attachment) => {
-    const url = getFileUrl(attachment.percorsoFile);
-    console.log('💾 Download file:', {
-      nome: attachment.nomeFile,
-      percorsoOriginale: attachment.percorsoFile,
-      urlGenerato: url
-    });
-    
-    try {
-      // Metodo 1: Usa window.open per aprire in nuova finestra
-      const newWindow = window.open(url, '_blank');
-      
-      // Se window.open funziona
-      if (newWindow) {
-        console.log('✅ File aperto in nuova finestra');
-        
-        // Per forzare il download invece della visualizzazione, 
-        // aggiungi un timeout per modificare la location
-        setTimeout(() => {
-          try {
-            newWindow.location.href = url + '?download=1';
-          } catch (e) {
-            console.log('Info: Impossibile modificare location (normale per sicurezza)');
-          }
-        }, 1000);
-      } else {
-        // Fallback: Crea un link di download temporaneo
-        console.log('🔄 Fallback: window.open bloccato, uso createElement');
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = attachment.nomeFile;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        
-        // Aggiungi al DOM temporaneamente
-        document.body.appendChild(link);
-        
-        // Simula il click
-        link.click();
-        
-        // Rimuovi il link dopo un breve delay
-        setTimeout(() => {
-          document.body.removeChild(link);
-        }, 100);
-        
-        console.log('✅ Download avviato tramite createElement');
-      }
-      
-    } catch (error) {
-      console.error('❌ Errore durante download:', error);
-      
-      // Ultimo tentativo: redirect diretto
-      try {
-        window.location.href = url;
-        console.log('🔄 Tentativo redirect diretto');
-      } catch (redirectError) {
-        console.error('❌ Anche il redirect è fallito:', redirectError);
-        alert(`Impossibile aprire il file. URL: ${url}\n\nCopia questo link e aprilo manualmente nel browser.`);
-      }
+    if (!entityId) {
+      console.error('Entity ID non fornito');
+      return;
     }
+
+    // Usa la rotta API di download
+    const baseUrl = API_CONFIG.baseURL.replace(/\/$/, '');
+    const apiPath = `/api/${entityType === 'autoveicolo' ? 'autoveicoli' : entityType === 'alboGestori' ? 'albo-gestori' : 'ren'}/${entityId}/allegati/${attachment._id}/download`;
+    const downloadUrl = `${baseUrl}${apiPath}`;
+    
+    console.log('Download URL:', downloadUrl);
+    window.open(downloadUrl, '_blank');
   };
 
   const handleDeleteClick = (attachment: Attachment) => {
@@ -263,17 +175,22 @@ const FileAttachmentViewer: React.FC<FileAttachmentViewerProps> = ({
   };
 
   const renderFilePreview = (attachment: Attachment) => {
-    const url = getFileUrl(attachment.percorsoFile);
+    const fileUrl = buildStaticFileUrl(attachment.percorsoFile);
     const extension = attachment.nomeFile.split('.').pop()?.toLowerCase();
     
-    console.log('🖼️ Rendering preview:', {
-      nome: attachment.nomeFile,
-      percorsoOriginale: attachment.percorsoFile,
-      urlGenerato: url,
-      extension: extension
-    });
+    console.log('Preview URL:', fileUrl);
     
     switch(extension) {
+      case 'pdf':
+        return (
+          <Box sx={{ height: '600px', width: '100%' }}>
+            <iframe 
+              src={fileUrl} 
+              style={{ width: '100%', height: '100%', border: 'none' }}
+              title={attachment.nomeFile}
+            />
+          </Box>
+        );
       case 'jpg':
       case 'jpeg':
       case 'png':
@@ -281,27 +198,16 @@ const FileAttachmentViewer: React.FC<FileAttachmentViewerProps> = ({
         return (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
             <img 
-              src={url} 
+              src={fileUrl} 
               alt={attachment.nomeFile} 
               style={{ maxWidth: '100%', maxHeight: '500px', objectFit: 'contain' }} 
-              onLoad={() => console.log('✅ Immagine caricata con successo')}
-              onError={(e) => {
-                console.error('❌ Errore caricamento immagine:', e);
-                const target = e.target as HTMLImageElement;
-                // Prova un percorso alternativo semplificato
-                const altPath = `${baseUrl}/uploads/${attachment.percorsoFile.split(/[/\\]/).pop()}`;
-                console.log('🔄 Tentativo percorso alternativo:', altPath);
-                if (target.src !== altPath) {
-                  target.src = altPath;
-                }
-              }}
             />
           </Box>
         );
       default:
         return (
           <Box sx={{ p: 4, textAlign: 'center' }}>
-            <Typography variant="body1" component="div" gutterBottom>
+            <Typography variant="body1" gutterBottom>
               Questo tipo di file non può essere visualizzato direttamente.
             </Typography>
             <Button 
@@ -324,7 +230,7 @@ const FileAttachmentViewer: React.FC<FileAttachmentViewerProps> = ({
 
   return (
     <Paper sx={{ p: 2, bgcolor: 'background.paper' }}>
-      <Typography variant="subtitle1" fontWeight="bold" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <FolderIcon /> {title} ({attachments?.length || 0})
       </Typography>
       <Divider sx={{ mb: 2 }} />
@@ -339,17 +245,11 @@ const FileAttachmentViewer: React.FC<FileAttachmentViewerProps> = ({
               <ListItemText
                 primary={attachment.nomeFile}
                 secondary={
-                  <Box component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                     <Chip label={attachment.tipo} size="small" color="info" />
-                    <Typography variant="caption" component="span">
+                    <Typography variant="caption">
                       Caricato il: {formatDate(attachment.dataCaricamento)}
                     </Typography>
-                    {/* DEBUG INFO - rimuovi in produzione */}
-                    {process.env.NODE_ENV === 'development' && (
-                      <Typography variant="caption" component="span" color="text.secondary">
-                        Path: {attachment.percorsoFile}
-                      </Typography>
-                    )}
                   </Box>
                 }
               />
@@ -385,21 +285,14 @@ const FileAttachmentViewer: React.FC<FileAttachmentViewerProps> = ({
         </Typography>
       )}
 
-      {/* Dialog di visualizzazione del file */}
       <Dialog 
         open={viewerOpen} 
         onClose={handleCloseViewer}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
       >
         <DialogTitle>
           {selectedFile?.nomeFile}
-          <IconButton
-            onClick={handleCloseViewer}
-            sx={{ position: 'absolute', right: 8, top: 8 }}
-          >
-            <DeleteIcon />
-          </IconButton>
         </DialogTitle>
         <DialogContent dividers>
           {selectedFile && renderFilePreview(selectedFile)}
@@ -416,14 +309,13 @@ const FileAttachmentViewer: React.FC<FileAttachmentViewerProps> = ({
         </DialogActions>
       </Dialog>
 
-      {/* Dialog di conferma eliminazione */}
       <Dialog open={deleteConfirmOpen} onClose={handleCancelDelete}>
         <DialogTitle>Conferma eliminazione</DialogTitle>
         <DialogContent>
-          <Typography component="div">
+          <Typography>
             Sei sicuro di voler eliminare l'allegato "{selectedFile?.nomeFile}"?
           </Typography>
-          <Typography variant="caption" color="error" component="div">
+          <Typography variant="caption" color="error">
             Questa azione non può essere annullata.
           </Typography>
         </DialogContent>

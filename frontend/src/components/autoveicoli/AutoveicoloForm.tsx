@@ -1,4 +1,4 @@
-// src/components/autoveicoli/AutoveicoloForm.tsx - VERSIONE AGGIORNATA CON NUOVI CAMPI
+// src/components/autoveicoli/AutoveicoloForm.tsx - VERSIONE COMPLETA CON PASS ZTL
 import React from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import {
@@ -30,38 +30,9 @@ import { autoveicoliService } from '../../services/autoveicoliService';
 import { alboGestoriService } from '../../services/alboGestoriService';
 import { Autoveicolo, TUTTI_TIPI_CARROZZERIA, getIntervalliRevisione, isMotorVehicle } from '../../types/Autoveicolo';
 import { AlboGestori } from '../../types/AlboGestori';
-// Importiamo il componente migliorato e la configurazione
 import EnhancedDatePicker from '../common/EnhancedDatePicker';
+import AllegatiManager from '../common/AllegatiManager';
 import getDatePickerConfig from '../../config/datePickerConfig';
-
-// Tipo per i dati del form che corrispondono al servizio
-interface AutoveicoloFormData {
-  marca: string;
-  modello: string;
-  cilindrata?: number;
-  kw?: number;
-  targa: string;
-  tipoCarrozzeria: Autoveicolo['tipoCarrozzeria'];
-  tipologiaAcquisto: 'Proprietà' | 'Leasing' | 'Noleggio';
-  scadenzaTitoloProprietà?: string;
-  dataImmatricolazione?: string;
-  ultimaRevisione?: string;
-  dataScadenzaBollo?: string;
-  esenteBollo?: boolean;
-  compagniaAssicurazione?: string;
-  numeroPolizzaAssicurazione?: string;
-  dataInizioAssicurazione?: string;
-  dataScadenzaAssicurazione?: string;
-  telaio?: string;
-  autista?: string;
-  portataMax?: number;
-  autCat1?: string;
-  autCat2?: string;
-  autCat3?: string;
-  passZTL?: boolean;
-  autRifiuti?: string[];
-  note?: string;
-}
 
 interface AutoveicoloFormProps {
   autoveicolo?: Autoveicolo | null;
@@ -69,7 +40,6 @@ interface AutoveicoloFormProps {
   onCancel: () => void;
 }
 
-// Lista completa dei tipi di carrozzeria
 const tipiCarrozzeria: Array<Autoveicolo['tipoCarrozzeria']> = [...TUTTI_TIPI_CARROZZERIA];
 const tipologieAcquisto: Array<'Proprietà' | 'Leasing' | 'Noleggio'> = ['Proprietà', 'Leasing', 'Noleggio'];
 
@@ -77,11 +47,10 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
   const [error, setError] = React.useState<string>('');
   const [loading, setLoading] = React.useState(false);
   const [alboGestoriList, setAlboGestoriList] = React.useState<AlboGestori[]>([]);
+  const [savedAutoveicoloId, setSavedAutoveicoloId] = React.useState<string | null>(null);
 
-  // Otteniamo la configurazione del DatePicker
   const datePickerConfig = getDatePickerConfig();
 
-  // Carica la lista degli Albo Gestori per il campo Aut. Rifiuti
   React.useEffect(() => {
     const loadAlboGestori = async () => {
       try {
@@ -94,7 +63,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
     loadAlboGestori();
   }, []);
 
-  // Valori di default del form con i nuovi campi
   const defaultValues = {
     marca: autoveicolo?.marca || '',
     modello: autoveicolo?.modello || '',
@@ -112,7 +80,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
     numeroPolizzaAssicurazione: autoveicolo?.numeroPolizzaAssicurazione || '',
     dataInizioAssicurazione: autoveicolo?.dataInizioAssicurazione ? dayjs(autoveicolo.dataInizioAssicurazione) : null,
     dataScadenzaAssicurazione: autoveicolo?.dataScadenzaAssicurazione ? dayjs(autoveicolo.dataScadenzaAssicurazione) : null,
-    // NUOVI CAMPI
     telaio: autoveicolo?.telaio || '',
     autista: autoveicolo?.autista || '',
     portataMax: autoveicolo?.portataMax || '',
@@ -120,15 +87,16 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
     autCat2: autoveicolo?.autCat2 || '',
     autCat3: autoveicolo?.autCat3 || '',
     passZTL: autoveicolo?.passZTL || false,
+    dataScadenzaPassZTL: autoveicolo?.dataScadenzaPassZTL ? dayjs(autoveicolo.dataScadenzaPassZTL) : null,
     autRifiuti: autoveicolo?.autRifiuti || [],
     note: autoveicolo?.note || '',
+    stato: autoveicolo?.stato || 'Attivo',
   };
 
   const { control, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues,
   });
 
-  // Debug per vedere gli errori di validazione
   React.useEffect(() => {
     if (Object.keys(errors).length > 0) {
       console.log('⚠️ Errori di validazione form:', errors);
@@ -138,8 +106,9 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
   const tipologiaAcquisto = watch('tipologiaAcquisto');
   const tipoCarrozzeria = watch('tipoCarrozzeria');
   const esenteBollo = watch('esenteBollo');
+  const statoVeicolo = watch('stato');
+  const passZTL = watch('passZTL');
 
-  // Funzione per ottenere informazioni sulla revisione
   const getRevisionInfo = (tipo: Autoveicolo['tipoCarrozzeria']) => {
     const intervalli = getIntervalliRevisione(tipo);
     
@@ -164,50 +133,66 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
     try {
       setError('');
       setLoading(true);
-      console.log('✅ setLoading(true) eseguito');
 
-      const formattedData: Partial<AutoveicoloFormData> = {
+      const formattedData: Partial<Autoveicolo> = {
         ...data,
-        // CORREZIONE IMPORTANTE: Gestione corretta cilindrata e kw per rimorchi
         cilindrata: isMotorVehicle(data.tipoCarrozzeria) ? Number(data.cilindrata) || 0 : 0,
         kw: isMotorVehicle(data.tipoCarrozzeria) ? Number(data.kw) || 0 : 0,
         portataMax: data.portataMax ? Number(data.portataMax) : undefined,
         dataImmatricolazione: data.dataImmatricolazione?.toISOString(),
         ultimaRevisione: data.ultimaRevisione?.toISOString(),
-        // Gestione corretta del bollo: se esente, non impostare la data
         dataScadenzaBollo: data.esenteBollo ? undefined : data.dataScadenzaBollo?.toISOString(),
         dataInizioAssicurazione: data.dataInizioAssicurazione?.toISOString(),
         dataScadenzaAssicurazione: data.dataScadenzaAssicurazione?.toISOString(),
         scadenzaTitoloProprietà: data.scadenzaTitoloProprietà?.toISOString(),
+        dataScadenzaPassZTL: data.passZTL && data.dataScadenzaPassZTL ? data.dataScadenzaPassZTL.toISOString() : undefined,
       };
 
-      console.log('📦 formattedData preparato:', formattedData);
-
       if (autoveicolo?._id) {
-        console.log('🔄 Aggiornamento autoveicolo esistente:', autoveicolo._id);
-        await autoveicoliService.update(autoveicolo._id, formattedData);
+        await autoveicoliService.update(autoveicolo._id, formattedData as any);
+        setSavedAutoveicoloId(autoveicolo._id);
       } else {
-        console.log('➕ Creazione nuovo autoveicolo');
-        await autoveicoliService.create(formattedData);
+        const newAutoveicolo = await autoveicoliService.create(formattedData as any);
+        setSavedAutoveicoloId(newAutoveicolo._id);
       }
 
-      console.log('✅ Operazione completata con successo');
-      onSuccess();
+      if (autoveicolo?._id) {
+        onSuccess();
+      }
     } catch (err: any) {
       console.error('❌ Errore durante il salvataggio:', err);
-      console.error('❌ Dettagli errore:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status
-      });
       setError(err.response?.data?.error || err.message || 'Errore durante il salvataggio');
     } finally {
-      console.log('🏁 setLoading(false) eseguito');
       setLoading(false);
     }
   };
 
   const revisionInfo = getRevisionInfo(tipoCarrozzeria);
+
+  const handleUploadAllegati = async (files: FileList, tipo: string) => {
+    const targetId = autoveicolo?._id || savedAutoveicoloId;
+    if (!targetId) {
+      throw new Error('Salva prima l\'autoveicolo per poter caricare allegati');
+    }
+    await autoveicoliService.uploadAllegati(targetId, files, tipo);
+  };
+
+  const handleDeleteAllegato = async (allegatoId: string) => {
+    const targetId = autoveicolo?._id || savedAutoveicoloId;
+    if (!targetId) return;
+    await autoveicoliService.deleteAllegato(targetId, allegatoId);
+  };
+
+  const getStatoColor = (stato: string) => {
+    switch (stato) {
+      case 'Attivo': return 'success';
+      case 'Veicolo Guasto': return 'warning';
+      case 'Chiuso': return 'default';
+      case 'Venduto': return 'info';
+      case 'Demolito': return 'error';
+      default: return 'default';
+    }
+  };
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="it">
@@ -219,7 +204,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
         <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ mt: 2 }}>
-          {/* Debug info */}
           {process.env.NODE_ENV === 'development' && (
             <Alert severity="info" sx={{ mb: 2 }}>
               <Typography variant="caption" component="div">
@@ -238,7 +222,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
             Informazioni Generali
           </Typography>
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            {/* Campo marca */}
             <Grid item xs={12} md={4}>
               <Controller
                 name="marca"
@@ -256,7 +239,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Campo modello */}
             <Grid item xs={12} md={4}>
               <Controller
                 name="modello"
@@ -274,7 +256,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Campo targa */}
             <Grid item xs={12} md={4}>
               <Controller
                 name="targa"
@@ -293,7 +274,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Campo telaio - NUOVO */}
             <Grid item xs={12} md={4}>
               <Controller
                 name="telaio"
@@ -308,7 +288,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Campo autista - NUOVO */}
             <Grid item xs={12} md={4}>
               <Controller
                 name="autista"
@@ -323,7 +302,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Campo portata max - NUOVO */}
             <Grid item xs={12} md={4}>
               <Controller
                 name="portataMax"
@@ -343,12 +321,58 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
 
           <Divider sx={{ mb: 3 }} />
 
-          {/* SEZIONE 2: CARATTERISTICHE TECNICHE */}
+          {/* SEZIONE 2: STATO VEICOLO */}
+          <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
+            Stato Veicolo
+          </Typography>
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            <Grid item xs={12} md={6}>
+              <Controller
+                name="stato"
+                control={control}
+                rules={{ required: 'Lo stato è obbligatorio' }}
+                render={({ field, fieldState }) => (
+                  <FormControl fullWidth error={!!fieldState.error}>
+                    <InputLabel>Stato Veicolo</InputLabel>
+                    <Select
+                      {...field}
+                      label="Stato Veicolo"
+                    >
+                      <MenuItem value="Attivo">Attivo</MenuItem>
+                      <MenuItem value="Veicolo Guasto">Veicolo Guasto</MenuItem>
+                      <MenuItem value="Chiuso">Chiuso</MenuItem>
+                      <MenuItem value="Venduto">Venduto</MenuItem>
+                      <MenuItem value="Demolito">Demolito</MenuItem>
+                    </Select>
+                    {fieldState.error && <FormHelperText>{fieldState.error.message}</FormHelperText>}
+                  </FormControl>
+                )}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center' }}>
+              <Chip
+                label={statoVeicolo}
+                color={getStatoColor(statoVeicolo) as any}
+                sx={{ height: 'auto', p: 1 }}
+              />
+              {statoVeicolo === 'Veicolo Guasto' && (
+                <Alert severity="warning" sx={{ ml: 2, flex: 1 }}>
+                  <Typography variant="caption">
+                    ⚠️ Gli alert per scadenze sono sospesi per veicoli guasti
+                  </Typography>
+                </Alert>
+              )}
+            </Grid>
+          </Grid>
+
+          <Divider sx={{ mb: 3 }} />
+
+          {/* SEZIONE 3: CARATTERISTICHE TECNICHE */}
           <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
             Caratteristiche Tecniche
           </Typography>
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            {/* Campo tipoCarrozzeria */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="tipoCarrozzeria"
@@ -373,7 +397,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Chip informativo revisione */}
             <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center' }}>
               {revisionInfo && (
                 <Chip
@@ -384,7 +407,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               )}
             </Grid>
 
-            {/* Campo cilindrata - CONDIZIONALE CORRETTO */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="cilindrata"
@@ -408,7 +430,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Campo kw - CONDIZIONALE CORRETTO */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="kw"
@@ -435,12 +456,11 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
 
           <Divider sx={{ mb: 3 }} />
 
-          {/* SEZIONE 3: AUTORIZZAZIONI - NUOVA */}
+          {/* SEZIONE 4: AUTORIZZAZIONI */}
           <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
             Autorizzazioni
           </Typography>
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            {/* Campo Aut Cat.1 - NUOVO */}
             <Grid item xs={12} md={4}>
               <Controller
                 name="autCat1"
@@ -455,7 +475,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Campo Aut Cat.2 - NUOVO */}
             <Grid item xs={12} md={4}>
               <Controller
                 name="autCat2"
@@ -470,7 +489,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Campo Aut Cat.3 - NUOVO */}
             <Grid item xs={12} md={4}>
               <Controller
                 name="autCat3"
@@ -485,7 +503,7 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Campo Pass ZTL - NUOVO */}
+            {/* PASS ZTL SECTION */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="passZTL"
@@ -505,8 +523,34 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Campo Aut. Rifiuti - NUOVO */}
-            <Grid item xs={12} md={6}>
+            {passZTL && (
+              <Grid item xs={12} md={6}>
+                <Controller
+                  name="dataScadenzaPassZTL"
+                  control={control}
+                  rules={{
+                    required: passZTL ? 'La data di scadenza del Pass ZTL è obbligatoria quando il Pass ZTL è attivo' : false
+                  }}
+                  render={({ field, fieldState }) => (
+                    <EnhancedDatePicker
+                      {...field}
+                      label="Scadenza Pass ZTL"
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message || 'Inserisci la data di scadenza del Pass ZTL'}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          ...datePickerConfig.slotProps?.textField,
+                        },
+                      }}
+                      {...datePickerConfig}
+                    />
+                  )}
+                />
+              </Grid>
+            )}
+
+            <Grid item xs={12}>
               <Controller
                 name="autRifiuti"
                 control={control}
@@ -531,7 +575,7 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
                       {alboGestoriList.map((albo) => (
                         <MenuItem key={albo._id} value={albo._id}>
                           <Checkbox checked={field.value.indexOf(albo._id) > -1} />
-                          <ListItemText primary={`${albo.numeroIscrizioneAlbo} - Cat.${albo.categoria} Cl.${albo.classe}`} />
+                          <ListItemText primary={`${albo.numeroIscrizioneAlbo} - Cat. ${albo.categoria} Classe ${albo.classe}`} />
                         </MenuItem>
                       ))}
                     </Select>
@@ -543,12 +587,11 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
 
           <Divider sx={{ mb: 3 }} />
 
-          {/* SEZIONE 4: PROPRIETÀ E ACQUISTO */}
+          {/* SEZIONE 5: PROPRIETÀ E ACQUISTO */}
           <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
             Proprietà e Acquisto
           </Typography>
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            {/* Campo tipologiaAcquisto */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="tipologiaAcquisto"
@@ -573,7 +616,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Data Immatricolazione */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="dataImmatricolazione"
@@ -597,7 +639,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Scadenza Titolo Proprietà - condizionale */}
             {['Leasing', 'Noleggio'].includes(tipologiaAcquisto) && (
               <Grid item xs={12} md={6}>
                 <Controller
@@ -628,12 +669,11 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
 
           <Divider sx={{ mb: 3 }} />
 
-          {/* SEZIONE 5: REVISIONI E BOLLO */}
+          {/* SEZIONE 6: REVISIONI E BOLLO */}
           <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
             Revisioni e Bollo
           </Typography>
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            {/* Ultima Revisione */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="ultimaRevisione"
@@ -654,7 +694,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Switch Esente Bollo - NUOVO */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="esenteBollo"
@@ -675,7 +714,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Scadenza Bollo - condizionale in base all'esenzione */}
             {!esenteBollo && (
               <Grid item xs={12} md={6}>
                 <Controller
@@ -706,12 +744,11 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
 
           <Divider sx={{ mb: 3 }} />
 
-          {/* SEZIONE 6: ASSICURAZIONE */}
+          {/* SEZIONE 7: ASSICURAZIONE */}
           <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
             Assicurazione
           </Typography>
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            {/* Compagnia Assicurazione */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="compagniaAssicurazione"
@@ -729,7 +766,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Numero Polizza */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="numeroPolizzaAssicurazione"
@@ -747,7 +783,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Data Inizio Assicurazione */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="dataInizioAssicurazione"
@@ -771,7 +806,6 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
               />
             </Grid>
 
-            {/* Data Scadenza Assicurazione */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="dataScadenzaAssicurazione"
@@ -798,12 +832,11 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
 
           <Divider sx={{ mb: 3 }} />
 
-          {/* SEZIONE 7: NOTE - NUOVA */}
+          {/* SEZIONE 8: NOTE */}
           <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
             Note e Commenti
           </Typography>
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            {/* Campo Note - NUOVO */}
             <Grid item xs={12}>
               <Controller
                 name="note"
@@ -822,6 +855,29 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
             </Grid>
           </Grid>
 
+          <Divider sx={{ mb: 3 }} />
+
+          {/* SEZIONE 9: ALLEGATI */}
+          {(autoveicolo?._id || savedAutoveicoloId) && (
+            <>
+              <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
+                Allegati
+              </Typography>
+              <Grid container spacing={3} sx={{ mb: 4 }}>
+                <Grid item xs={12}>
+                  <AllegatiManager
+                    allegati={autoveicolo?.allegati || []}
+                    onUpload={handleUploadAllegati}
+                    onDelete={handleDeleteAllegato}
+                    title="Documenti Autoveicolo"
+                  />
+                </Grid>
+              </Grid>
+
+              <Divider sx={{ mb: 3 }} />
+            </>
+          )}
+
           {/* Pulsanti di azione */}
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
             <Button 
@@ -838,7 +894,27 @@ const AutoveicoloForm: React.FC<AutoveicoloFormProps> = ({ autoveicolo, onSucces
             >
               {loading ? 'Salvando...' : (autoveicolo ? 'Aggiorna' : 'Salva')}
             </Button>
+            
+            {savedAutoveicoloId && !autoveicolo?._id && (
+              <Button 
+                variant="contained"
+                color="success"
+                onClick={onSuccess}
+                sx={{ ml: 1 }}
+              >
+                Completa
+              </Button>
+            )}
           </Box>
+          
+          {savedAutoveicoloId && !autoveicolo?._id && (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                Autoveicolo salvato con successo! 
+                Ora puoi caricare eventuali allegati o cliccare "Completa" per tornare alla lista.
+              </Typography>
+            </Alert>
+          )}
         </Box>
       </Paper>
     </LocalizationProvider>

@@ -1,4 +1,4 @@
-// src/components/autoveicoli/AutoveicoloDetailModal.tsx - VERSIONE AGGIORNATA
+// src/components/autoveicoli/AutoveicoloDetailModal.tsx - VERSIONE CORRETTA
 import React from 'react';
 import {
   Box,
@@ -16,11 +16,13 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon, CheckCircle, Cancel } from '@mui/icons-material';
 import { Autoveicolo, getIntervalliRevisione, calcolaProssimaRevisione, isMotorVehicle } from '../../types/Autoveicolo';
+import FileAttachmentViewer from '../common/FileAttachmentViewer';
+import { autoveicoliService } from '../../services/autoveicoliService';
 
 interface AutoveicoloDetailModalProps {
   autoveicolo: Autoveicolo;
   onClose: () => void;
-  onRefresh?: () => void | Promise<void>; // ✅ AGGIUNTO: Prop opzionale per refresh
+  onRefresh?: () => void | Promise<void>;
 }
 
 const AutoveicoloDetailModal: React.FC<AutoveicoloDetailModalProps> = ({ autoveicolo, onClose, onRefresh }) => {
@@ -59,6 +61,18 @@ const AutoveicoloDetailModal: React.FC<AutoveicoloDetailModalProps> = ({ autovei
 
   // Calcola la prossima revisione
   const prossimaRevisione = calcolaProssimaRevisione(autoveicolo);
+
+  // Handler per eliminazione allegato
+  const handleDeleteAllegato = async (allegatoId: string) => {
+    try {
+      await autoveicoliService.deleteAllegato(autoveicolo._id, allegatoId);
+      if (onRefresh) {
+        await onRefresh();
+      }
+    } catch (error) {
+      console.error('Errore eliminazione allegato:', error);
+    }
+  };
 
   return (
     <Paper sx={{ p: 3, maxWidth: 1000, mx: 'auto', maxHeight: '90vh', overflow: 'auto' }}>
@@ -365,26 +379,18 @@ const AutoveicoloDetailModal: React.FC<AutoveicoloDetailModalProps> = ({ autovei
           </Grid>
         )}
 
-        {/* SEZIONE 9: ALLEGATI */}
-        {autoveicolo.allegati && autoveicolo.allegati.length > 0 && (
-          <Grid item xs={12}>
-            <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom component="div">
-                Allegati ({autoveicolo.allegati.length})
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {autoveicolo.allegati.map((allegato, index) => (
-                  <Chip 
-                    key={index} 
-                    label={`${allegato.nomeFile} (${allegato.tipo})`} 
-                    size="small" 
-                    variant="outlined" 
-                  />
-                ))}
-              </Box>
-            </Paper>
-          </Grid>
-        )}
+        {/* SEZIONE 9: ALLEGATI - VERSIONE CORRETTA CON VISUALIZZATORE */}
+        <Grid item xs={12}>
+          <FileAttachmentViewer 
+            attachments={autoveicolo.allegati || []}
+            canDelete={true}
+            onDelete={handleDeleteAllegato}
+            entityType="autoveicolo"
+            entityId={autoveicolo._id}
+            title={`Allegati (${autoveicolo.allegati?.length || 0})`}
+            emptyMessage="Nessun allegato caricato per questo veicolo"
+          />
+        </Grid>
 
         {/* SEZIONE 10: ISCRIZIONI ANGA */}
         {autoveicolo.iscrizioneANGA && autoveicolo.iscrizioneANGA.length > 0 && (

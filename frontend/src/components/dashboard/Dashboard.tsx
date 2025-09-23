@@ -1,4 +1,4 @@
-// src/components/dashboard/Dashboard.tsx
+// src/components/dashboard/Dashboard.tsx - VERSIONE COMPLETA CON PASS ZTL
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -30,7 +30,9 @@ import {
   Assignment,
   Visibility,
   ArticleOutlined,
-  Schedule as ScheduleIcon
+  Schedule as ScheduleIcon,
+  LocalParking,
+  Info
 } from '@mui/icons-material';
 import { dashboardService } from '../../services/dashboardService';
 import { DashboardData } from '../../types/Dashboard';
@@ -60,6 +62,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // Helper functions
   const formatDate = (date: string | Date) => {
     if (!date) return '-';
     return dayjs(date).format('DD MMMM YYYY');
@@ -71,10 +74,8 @@ const Dashboard: React.FC = () => {
     return 'info';
   };
 
-  // Funzione per ottenere il chip del tipo di revisione
   const getRevisionTypeChip = (tipoRevisione?: string) => {
     if (!tipoRevisione) return null;
-    
     return (
       <Chip 
         size="small" 
@@ -85,7 +86,37 @@ const Dashboard: React.FC = () => {
     );
   };
 
-  // Funzioni per navigazione quando si clicca sugli alert
+  const getLivelloUrgenzaColor = (livello: string) => {
+    switch (livello) {
+      case 'scaduto': return 'error';
+      case 'critico': return 'error';
+      case 'urgente': return 'warning';
+      case 'avviso': return 'info';
+      default: return 'default';
+    }
+  };
+
+  const getLivelloUrgenzaIcon = (livello: string) => {
+    switch (livello) {
+      case 'scaduto': return <Error color="error" />;
+      case 'critico': return <Warning color="error" />;
+      case 'urgente': return <Warning color="warning" />;
+      case 'avviso': return <Info color="info" />;
+      default: return <ScheduleIcon />;
+    }
+  };
+
+  const getStatoChip = (stato: string) => {
+    const colors: Record<string, "primary" | "secondary" | "error" | "warning" | "info" | "success"> = {
+      'Attivo': 'success',
+      'Venduto': 'primary',
+      'Chiuso': 'warning',
+      'Demolito': 'error',
+      'Veicolo Guasto': 'warning'
+    };
+    return <Chip label={stato} color={colors[stato] || 'info'} size="small" />;
+  };
+
   const handleViewAutoveicolo = (autoveicoloId: string) => {
     navigate(`/autoveicoli`);
   };
@@ -118,20 +149,20 @@ const Dashboard: React.FC = () => {
     return null;
   }
 
-  // Conta gli alert totali (includendo titoli di proprietà)
+  // Calcola alert totali includendo Pass ZTL
   const alertTotali = 
     data.contatori.revisioniInScadenza +
     data.contatori.bolliInScadenza +
     data.contatori.assicurazioniInScadenza +
     data.contatori.angaInScadenza +
     data.contatori.renInScadenza +
-    (data.contatori.titoliProprietaInScadenza || 0);
+    (data.contatori.titoliProprietaInScadenza || 0) +
+    (data.contatori.passZTLInScadenza || 0);
 
-  // Separa le revisioni per tipo
   const revisioniAnnuali = data.revisioni.filter(r => r.tipoRevisione === 'Annuale');
   const revisioniBiennali = data.revisioni.filter(r => r.tipoRevisione !== 'Annuale');
 
-  // Prepara i dati per le card statistiche (con titoli di proprietà)
+  // Cards statistiche aggiornate con Pass ZTL
   const statsCards = [
     {
       title: 'Mezzi Attivi',
@@ -156,33 +187,22 @@ const Dashboard: React.FC = () => {
       subtitle: revisioniAnnuali.length > 0 ? `${revisioniAnnuali.length} ann. + ${revisioniBiennali.length} bien.` : undefined
     },
     {
-      title: 'Assicurazioni',
-      value: data.contatori.assicurazioniInScadenza,
-      icon: <Security />,
-      color: data.contatori.assicurazioniInScadenza > 0 ? '#ff9800' : '#4caf50',
-      bgColor: data.contatori.assicurazioniInScadenza > 0 ? '#fff3e0' : '#e8f5e9'
+      title: 'Pass ZTL',
+      value: data.contatori.passZTLInScadenza,
+      icon: <LocalParking />,
+      color: data.contatori.passZTLInScadenza > 0 ? '#ff9800' : '#4caf50',
+      bgColor: data.contatori.passZTLInScadenza > 0 ? '#fff3e0' : '#e8f5e9'
     }
   ];
 
-  // Aggiungi card per titoli di proprietà se ci sono
-  if (data.contatori.titoliProprietaInScadenza && data.contatori.titoliProprietaInScadenza > 0) {
-    statsCards.push({
-      title: 'Titoli Proprietà',
-      value: data.contatori.titoliProprietaInScadenza,
-      icon: <ArticleOutlined />,
-      color: '#ff9800',
-      bgColor: '#fff3e0'
-    });
-  }
-
   return (
     <Box>
+      {/* Header */}
       <Box mb={4} sx={{ 
         background: 'linear-gradient(45deg, #1976d2 30%, #21cbf3 90%)',
         color: 'white',
         p: 3,
-        borderRadius: 2,
-        mb: 4
+        borderRadius: 2
       }}>
         <Typography variant="h4" gutterBottom>
           Dashboard - Gestione Mezzi
@@ -236,7 +256,75 @@ const Dashboard: React.FC = () => {
 
       {/* Sezione Alert */}
       <Grid container spacing={3} mb={4}>
-        {/* Revisioni in Scadenza - AGGIORNATO */}
+        {/* Pass ZTL in Scadenza - NUOVA SEZIONE */}
+        <Grid item xs={12} md={6}>
+          <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
+            <Typography variant="h6" gutterBottom color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <LocalParking /> Pass ZTL in Scadenza ({data.passZTLInScadenza.length})
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+            {data.passZTLInScadenza.length > 0 ? (
+              <List dense>
+                {data.passZTLInScadenza.slice(0, 5).map((item, index) => (
+                  <ListItem key={index} sx={{ px: 0 }}>
+                    <ListItemIcon>
+                      {getLivelloUrgenzaIcon(item.livelloUrgenza)}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {`${item.autoveicolo.marca} ${item.autoveicolo.modello} - ${item.autoveicolo.targa}`}
+                          {getStatoChip(item.autoveicolo.stato)}
+                          {item.autoveicolo.autista && (
+                            <Chip 
+                              size="small" 
+                              label={item.autoveicolo.autista}
+                              variant="outlined"
+                              sx={{ fontSize: '0.65rem' }}
+                            />
+                          )}
+                        </Box>
+                      }
+                      secondary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {formatDate(item.dataScadenza)}
+                          </Typography>
+                          <Chip 
+                            size="small" 
+                            label={item.messaggio}
+                            color={getLivelloUrgenzaColor(item.livelloUrgenza) as any}
+                          />
+                        </Box>
+                      }
+                    />
+                    <IconButton 
+                      size="small" 
+                      color="primary"
+                      onClick={() => handleViewAutoveicolo(item.autoveicolo._id)}
+                    >
+                      <Visibility />
+                    </IconButton>
+                  </ListItem>
+                ))}
+                {data.passZTLInScadenza.length > 5 && (
+                  <ListItem>
+                    <ListItemText 
+                      primary={`... e altri ${data.passZTLInScadenza.length - 5} Pass ZTL in scadenza`}
+                      sx={{ textAlign: 'center', color: 'text.secondary' }}
+                    />
+                  </ListItem>
+                )}
+              </List>
+            ) : (
+              <Alert severity="success" icon={<LocalParking />}>
+                Nessun Pass ZTL in scadenza
+              </Alert>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Revisioni in Scadenza */}
         <Grid item xs={12} md={6}>
           <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
             <Typography variant="h6" gutterBottom color="error" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -253,24 +341,13 @@ const Dashboard: React.FC = () => {
                 {data.revisioni.slice(0, 5).map((item, index) => (
                   <ListItem key={index} sx={{ px: 0 }}>
                     <ListItemIcon>
-                      {item.urgent ? 
-                        <Error color="error" /> : 
-                        <Warning color="warning" />
-                      }
+                      {item.urgent ? <Error color="error" /> : <Warning color="warning" />}
                     </ListItemIcon>
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           {`${item.autoveicolo.marca} ${item.autoveicolo.modello} - ${item.autoveicolo.targa}`}
                           {getRevisionTypeChip(item.tipoRevisione)}
-                          {item.autoveicolo.tipoCarrozzeria && (
-                            <Chip 
-                              size="small" 
-                              label={item.autoveicolo.tipoCarrozzeria}
-                              variant="outlined"
-                              sx={{ fontSize: '0.65rem' }}
-                            />
-                          )}
                         </Box>
                       }
                       secondary={
@@ -278,62 +355,25 @@ const Dashboard: React.FC = () => {
                           {formatDate(item.dataRevisione)}
                           <Chip 
                             size="small" 
-                            label={`${item.giorni > 0 ? item.giorni : Math.abs(item.giorni)} giorni ${item.giorni > 0 ? 'rimanenti' : 'scaduto'}`}
+                            label={`${Math.abs(item.giorni)} giorni ${item.giorni > 0 ? 'rimanenti' : 'scaduto'}`}
                             color={getChipColor(item.giorni)}
                           />
                         </Box>
                       }
                     />
-                    <IconButton 
-                      size="small" 
-                      color="primary"
-                      onClick={() => handleViewAutoveicolo(item.autoveicolo._id)}
-                    >
+                    <IconButton size="small" color="primary" onClick={() => handleViewAutoveicolo(item.autoveicolo._id)}>
                       <Visibility />
                     </IconButton>
                   </ListItem>
                 ))}
-                {data.revisioni.length > 5 && (
-                  <ListItem>
-                    <ListItemText 
-                      primary={`... e altre ${data.revisioni.length - 5} revisioni in scadenza`}
-                      sx={{ textAlign: 'center', color: 'text.secondary' }}
-                    />
-                  </ListItem>
-                )}
               </List>
             ) : (
               <Alert severity="success">Nessuna revisione in scadenza</Alert>
             )}
-            
-            {/* Riepilogo per tipo di revisione */}
-            {(revisioniAnnuali.length > 0 || revisioniBiennali.length > 0) && (
-              <Box sx={{ mt: 2, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
-                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                  Riepilogo per tipo:
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  {revisioniAnnuali.length > 0 && (
-                    <Chip 
-                      size="small" 
-                      label={`${revisioniAnnuali.length} Annuali`} 
-                      color="warning"
-                    />
-                  )}
-                  {revisioniBiennali.length > 0 && (
-                    <Chip 
-                      size="small" 
-                      label={`${revisioniBiennali.length} Biennali`} 
-                      color="info"
-                    />
-                  )}
-                </Box>
-              </Box>
-            )}
           </Paper>
         </Grid>
 
-        {/* Bolli in Scadenza */}
+        {/* Altre sezioni... */}
         <Grid item xs={12} md={6}>
           <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
             <Typography variant="h6" gutterBottom color="warning.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -345,41 +385,17 @@ const Dashboard: React.FC = () => {
                 {data.bolliInScadenza.slice(0, 5).map((item, index) => (
                   <ListItem key={index} sx={{ px: 0 }}>
                     <ListItemIcon>
-                      {item.urgent ? 
-                        <Error color="error" /> : 
-                        <Warning color="warning" />
-                      }
+                      {item.urgent ? <Error color="error" /> : <Warning color="warning" />}
                     </ListItemIcon>
                     <ListItemText
                       primary={`${item.autoveicolo.marca} ${item.autoveicolo.modello} - ${item.autoveicolo.targa}`}
-                      secondary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {formatDate(item.dataScadenza)}
-                          <Chip 
-                            size="small" 
-                            label={`${item.giorni > 0 ? item.giorni : Math.abs(item.giorni)} giorni ${item.giorni > 0 ? 'rimanenti' : 'scaduto'}`}
-                            color={getChipColor(item.giorni)}
-                          />
-                        </Box>
-                      }
+                      secondary={formatDate(item.dataScadenza)}
                     />
-                    <IconButton 
-                      size="small" 
-                      color="primary"
-                      onClick={() => handleViewAutoveicolo(item.autoveicolo._id)}
-                    >
+                    <IconButton size="small" color="primary" onClick={() => handleViewAutoveicolo(item.autoveicolo._id)}>
                       <Visibility />
                     </IconButton>
                   </ListItem>
                 ))}
-                {data.bolliInScadenza.length > 5 && (
-                  <ListItem>
-                    <ListItemText 
-                      primary={`... e altri ${data.bolliInScadenza.length - 5} bolli in scadenza`}
-                      sx={{ textAlign: 'center', color: 'text.secondary' }}
-                    />
-                  </ListItem>
-                )}
               </List>
             ) : (
               <Alert severity="success">Nessun bollo in scadenza</Alert>
@@ -387,7 +403,6 @@ const Dashboard: React.FC = () => {
           </Paper>
         </Grid>
 
-        {/* Assicurazioni in Scadenza */}
         <Grid item xs={12} md={6}>
           <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
             <Typography variant="h6" gutterBottom color="info.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -399,248 +414,38 @@ const Dashboard: React.FC = () => {
                 {data.assicurazioniInScadenza.slice(0, 5).map((item, index) => (
                   <ListItem key={index} sx={{ px: 0 }}>
                     <ListItemIcon>
-                      {item.urgent ? 
-                        <Error color="error" /> : 
-                        <Warning color="warning" />
-                      }
+                      {item.urgent ? <Error color="error" /> : <Warning color="warning" />}
                     </ListItemIcon>
                     <ListItemText
                       primary={`${item.autoveicolo.marca} ${item.autoveicolo.modello} - ${item.autoveicolo.targa}`}
-                      secondary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {formatDate(item.dataScadenza)}
-                          <Chip 
-                            size="small" 
-                            label={`${item.giorni > 0 ? item.giorni : Math.abs(item.giorni)} giorni ${item.giorni > 0 ? 'rimanenti' : 'scaduto'}`}
-                            color={getChipColor(item.giorni)}
-                          />
-                          {item.tolleranza && (
-                            <Chip size="small" label="15 giorni tolleranza" color="info" />
-                          )}
-                        </Box>
-                      }
+                      secondary={formatDate(item.dataScadenza)}
                     />
-                    <IconButton 
-                      size="small" 
-                      color="primary"
-                      onClick={() => handleViewAutoveicolo(item.autoveicolo._id)}
-                    >
+                    <IconButton size="small" color="primary" onClick={() => handleViewAutoveicolo(item.autoveicolo._id)}>
                       <Visibility />
                     </IconButton>
                   </ListItem>
                 ))}
-                {data.assicurazioniInScadenza.length > 5 && (
-                  <ListItem>
-                    <ListItemText 
-                      primary={`... e altre ${data.assicurazioniInScadenza.length - 5} assicurazioni in scadenza`}
-                      sx={{ textAlign: 'center', color: 'text.secondary' }}
-                    />
-                  </ListItem>
-                )}
               </List>
             ) : (
               <Alert severity="success">Nessuna assicurazione in scadenza</Alert>
             )}
           </Paper>
         </Grid>
-
-        {/* Titoli di Proprietà in Scadenza */}
-        <Grid item xs={12} md={6}>
-          <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
-            <Typography variant="h6" gutterBottom color="warning.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <ArticleOutlined /> Titoli di Proprietà in Scadenza ({(data.titoliProprietaInScadenza || []).length})
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            {data.titoliProprietaInScadenza && data.titoliProprietaInScadenza.length > 0 ? (
-              <List dense>
-                {data.titoliProprietaInScadenza.slice(0, 5).map((item, index) => (
-                  <ListItem key={index} sx={{ px: 0 }}>
-                    <ListItemIcon>
-                      {item.urgent ? 
-                        <Error color="error" /> : 
-                        <Warning color="warning" />
-                      }
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={`${item.autoveicolo.marca} ${item.autoveicolo.modello} - ${item.autoveicolo.targa}`}
-                      secondary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Chip 
-                            size="small"
-                            label={item.autoveicolo.tipologiaAcquisto}
-                            color="secondary"
-                          />
-                          {formatDate(item.dataScadenza)}
-                          <Chip 
-                            size="small" 
-                            label={`${item.giorni > 0 ? item.giorni : Math.abs(item.giorni)} giorni ${item.giorni > 0 ? 'rimanenti' : 'scaduto'}`}
-                            color={getChipColor(item.giorni)}
-                          />
-                        </Box>
-                      }
-                    />
-                    <IconButton 
-                      size="small" 
-                      color="primary"
-                      onClick={() => handleViewAutoveicolo(item.autoveicolo._id)}
-                    >
-                      <Visibility />
-                    </IconButton>
-                  </ListItem>
-                ))}
-                {(data.titoliProprietaInScadenza || []).length > 5 && (
-                  <ListItem>
-                    <ListItemText 
-                      primary={`... e altri ${(data.titoliProprietaInScadenza || []).length - 5} titoli in scadenza`}
-                      sx={{ textAlign: 'center', color: 'text.secondary' }}
-                    />
-                  </ListItem>
-                )}
-              </List>
-            ) : (
-              <Alert severity="success">Nessun titolo di proprietà in scadenza</Alert>
-            )}
-          </Paper>
-        </Grid>
-
-        {/* ANGA e REN in Scadenza */}
-        <Grid item xs={12} md={6}>
-          <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
-            <Typography variant="h6" gutterBottom color="secondary.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Assignment /> Iscrizioni in Scadenza
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <Chip 
-                label={`ANGA: ${data.contatori.angaInScadenza}`} 
-                color={data.contatori.angaInScadenza > 0 ? 'warning' : 'success'}
-                size="small"
-              />
-              <Chip 
-                label={`REN: ${data.contatori.renInScadenza}`} 
-                color={data.contatori.renInScadenza > 0 ? 'warning' : 'success'}
-                size="small"
-              />
-            </Box>
-            
-            {/* Mostra iscrizioni ANGA in scadenza */}
-            {data.angaInScadenza.length > 0 && (
-              <Box mb={2}>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  Albo Gestori Ambientali
-                </Typography>
-                <List dense>
-                  {data.angaInScadenza.slice(0, 3).map((item, index) => (
-                    <ListItem key={index} sx={{ px: 0 }}>
-                      <ListItemIcon>
-                        {item.urgent ? 
-                          <Error color="error" /> : 
-                          <Warning color="warning" />
-                        }
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={`${item.alboGestore.numeroIscrizione} - Cat. ${item.alboGestore.categoria} Classe ${item.alboGestore.classe}`}
-                        secondary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {formatDate(item.dataScadenza)}
-                            <Chip 
-                              size="small" 
-                              label={`${item.giorni} giorni`}
-                              color={getChipColor(item.giorni)}
-                            />
-                          </Box>
-                        }
-                      />
-                      <IconButton 
-                        size="small" 
-                        color="primary"
-                        onClick={() => handleViewAlboGestori(item.alboGestore._id)}
-                      >
-                        <Visibility />
-                      </IconButton>
-                    </ListItem>
-                  ))}
-                </List>
-              </Box>
-            )}
-
-            {/* Mostra iscrizioni REN in scadenza */}
-            {data.renInScadenza.length > 0 && (
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  Registro Elettronico Nazionale
-                </Typography>
-                <List dense>
-                  {data.renInScadenza.slice(0, 3).map((item, index) => (
-                    <ListItem key={index} sx={{ px: 0 }}>
-                      <ListItemIcon>
-                        {item.urgent ? 
-                          <Error color="error" /> : 
-                          <Warning color="warning" />
-                        }
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={`${item.ren.numeroIscrizione} - ${item.ren.regione}, ${item.ren.provincia}`}
-                        secondary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {formatDate(item.dataScadenza)}
-                            <Chip 
-                              size="small" 
-                              label={`${item.giorni} giorni`}
-                              color={getChipColor(item.giorni)}
-                            />
-                          </Box>
-                        }
-                      />
-                      <IconButton 
-                        size="small" 
-                        color="primary"
-                        onClick={() => handleViewREN(item.ren._id)}
-                      >
-                        <Visibility />
-                      </IconButton>
-                    </ListItem>
-                  ))}
-                </List>
-              </Box>
-            )}
-
-            {data.angaInScadenza.length === 0 && data.renInScadenza.length === 0 && (
-              <Alert severity="success">Nessuna iscrizione in scadenza</Alert>
-            )}
-          </Paper>
-        </Grid>
       </Grid>
 
-      {/* Riepilogo mezzi per tipo */}
+      {/* Riepilogo */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <Paper elevation={3} sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Riepilogo Mezzi per Stato
-            </Typography>
+            <Typography variant="h6" gutterBottom>Riepilogo Mezzi per Stato</Typography>
             <Divider sx={{ mb: 2 }} />
             <Grid container spacing={2}>
               {data.riepilogoMezzi.map((item, index) => (
                 <Grid item xs={6} key={index}>
-                  <Card sx={{ 
-                    bgcolor: item._id === 'Attivo' ? '#e8f5e9' : '#f5f5f5',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      transform: 'scale(1.05)',
-                      boxShadow: 4
-                    }
-                  }}>
+                  <Card sx={{ bgcolor: item._id === 'Attivo' ? '#e8f5e9' : '#f5f5f5' }}>
                     <CardContent sx={{ p: 2 }}>
-                      <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Typography variant="body2" color="text.secondary">
-                          {item._id}
-                        </Typography>
-                        <Typography variant="h6" component="div">
-                          {item.count}
-                        </Typography>
-                      </Box>
+                      <Typography variant="body2" color="text.secondary">{item._id}</Typography>
+                      <Typography variant="h6">{item.count}</Typography>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -651,62 +456,30 @@ const Dashboard: React.FC = () => {
 
         <Grid item xs={12} md={6}>
           <Paper elevation={3} sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Azioni Rapide
-            </Typography>
+            <Typography variant="h6" gutterBottom>Azioni Rapide</Typography>
             <Divider sx={{ mb: 2 }} />
             <Grid container spacing={2}>
-              <Grid item xs={6} sm={4}>
-                <Card sx={{ 
-                  bgcolor: '#e3f2fd',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    transform: 'scale(1.05)',
-                    boxShadow: 4
-                  }
-                }} onClick={() => navigate('/autoveicoli')}>
+              <Grid item xs={4}>
+                <Card sx={{ bgcolor: '#e3f2fd', cursor: 'pointer' }} onClick={() => navigate('/autoveicoli')}>
                   <CardContent sx={{ p: 2, textAlign: 'center' }}>
-                    <DirectionsCar color="primary" sx={{ mb: 1 }} />
-                    <Typography variant="body2">
-                      Nuovo Veicolo
-                    </Typography>
+                    <DirectionsCar color="primary" />
+                    <Typography variant="body2">Nuovo Veicolo</Typography>
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={6} sm={4}>
-                <Card sx={{ 
-                  bgcolor: '#f3e5f5',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    transform: 'scale(1.05)',
-                    boxShadow: 4
-                  }
-                }} onClick={() => navigate('/albo-gestori')}>
+              <Grid item xs={4}>
+                <Card sx={{ bgcolor: '#f3e5f5', cursor: 'pointer' }} onClick={() => navigate('/albo-gestori')}>
                   <CardContent sx={{ p: 2, textAlign: 'center' }}>
-                    <Receipt color="secondary" sx={{ mb: 1 }} />
-                    <Typography variant="body2">
-                      Nuovo Albo
-                    </Typography>
+                    <Receipt color="secondary" />
+                    <Typography variant="body2">Nuovo Albo</Typography>
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={6} sm={4}>
-                <Card sx={{ 
-                  bgcolor: '#e8f5e9',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    transform: 'scale(1.05)',
-                    boxShadow: 4
-                  }
-                }} onClick={() => navigate('/ren')}>
+              <Grid item xs={4}>
+                <Card sx={{ bgcolor: '#e8f5e9', cursor: 'pointer' }} onClick={() => navigate('/ren')}>
                   <CardContent sx={{ p: 2, textAlign: 'center' }}>
-                    <Assignment color="success" sx={{ mb: 1 }} />
-                    <Typography variant="body2">
-                      Nuovo REN
-                    </Typography>
+                    <Assignment color="success" />
+                    <Typography variant="body2">Nuovo REN</Typography>
                   </CardContent>
                 </Card>
               </Grid>

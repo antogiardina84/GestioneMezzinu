@@ -1,3 +1,4 @@
+// src/types/Dashboard.ts - VERSIONE AGGIORNATA CON PASS ZTL
 export interface DashboardData {
   riepilogoMezzi: Array<{
     _id: string;
@@ -11,6 +12,7 @@ export interface DashboardData {
     angaInScadenza: number;
     renInScadenza: number;
     titoliProprietaInScadenza: number;
+    passZTLInScadenza: number; // NUOVO CAMPO
   };
   revisioni: Array<{
     autoveicolo: {
@@ -18,12 +20,12 @@ export interface DashboardData {
       targa: string;
       marca: string;
       modello: string;
-      tipoCarrozzeria?: string; // AGGIUNTO
+      tipoCarrozzeria?: string;
     };
     dataRevisione: Date;
     urgent: boolean;
     giorni: number;
-    tipoRevisione?: string; // AGGIUNTO
+    tipoRevisione?: string;
   }>;
   bolliInScadenza: Array<{
     autoveicolo: {
@@ -59,6 +61,22 @@ export interface DashboardData {
     dataScadenza: Date;
     urgent: boolean;
     giorni: number;
+  }>;
+  // NUOVA SEZIONE: Pass ZTL
+  passZTLInScadenza: Array<{
+    autoveicolo: {
+      _id: string;
+      targa: string;
+      marca: string;
+      modello: string;
+      autista?: string;
+      stato: string;
+    };
+    dataScadenza: Date;
+    urgent: boolean;
+    giorni: number;
+    livelloUrgenza: 'scaduto' | 'critico' | 'urgente' | 'avviso';
+    messaggio: string;
   }>;
   angaInScadenza: Array<{
     alboGestore: {

@@ -1,4 +1,4 @@
-// src/types/Autoveicolo.ts - VERSIONE AGGIORNATA
+// src/types/Autoveicolo.ts - VERSIONE AGGIORNATA CON PASS ZTL
 export interface Autoveicolo {
   _id: string;
   marca: string;
@@ -11,20 +11,19 @@ export interface Autoveicolo {
   scadenzaTitoloProprietà?: Date;
   dataImmatricolazione: Date;
   ultimaRevisione?: Date;
-  dataScadenzaBollo?: Date; // Ora opzionale per veicoli esenti
-  esenteBollo: boolean; // Nuovo campo per l'esenzione bollo
+  dataScadenzaBollo?: Date;
+  esenteBollo: boolean;
   compagniaAssicurazione: string;
   numeroPolizzaAssicurazione: string;
   dataInizioAssicurazione: Date;
   dataScadenzaAssicurazione: Date;
   iscrizioneANGA: string[];
-  stato: 'Attivo' | 'Chiuso' | 'Venduto' | 'Demolito';
+  stato: 'Attivo' | 'Chiuso' | 'Venduto' | 'Demolito' | 'Veicolo Guasto';
   allegati: Allegato[];
   datiDemolizione?: {
     datiDemolitore: string;
     dataDemolizione: Date;
   };
-  // NUOVI CAMPI AGGIUNTI
   telaio?: string;
   autista?: string;
   portataMax?: number;
@@ -32,7 +31,9 @@ export interface Autoveicolo {
   autCat2?: string;
   autCat3?: string;
   passZTL: boolean;
-  autRifiuti: string[]; // Array di ID delle autorizzazioni rifiuti (riferimenti ad AlboGestori)
+  // NUOVO CAMPO PER LA SCADENZA DEL PASS ZTL
+  dataScadenzaPassZTL?: Date;
+  autRifiuti: string[];
   note?: string;
   createdAt: Date;
   updatedAt: Date;

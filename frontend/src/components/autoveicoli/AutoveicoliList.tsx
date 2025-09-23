@@ -1,4 +1,4 @@
-// src/components/autoveicoli/AutoveicoliList.tsx
+// src/components/autoveicoli/AutoveicoliList.tsx - CON ACTION BUTTONS
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -14,339 +14,225 @@ import {
   IconButton,
   TextField,
   InputAdornment,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   Chip,
   Dialog,
   CircularProgress,
+  TablePagination,
   Menu,
+  MenuItem,
   ListItemIcon,
   ListItemText,
-  Fab,
-  Toolbar,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Search as SearchIcon,
-  Visibility as VisibilityIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  MoreVert as MoreVertIcon,
   DirectionsCar,
+  Edit as EditIcon,
+  MoreVert as MoreVertIcon,
+  Visibility as VisibilityIcon,
+  Delete as DeleteIcon,
   SellOutlined,
   Delete as DemolisciIcon,
   Close as ChiudiIcon,
-  Receipt,
-  Security,
-  CheckCircle,
-  Update as UpdateIcon,
-  CalendarMonth as CalendarIcon,
-  ArticleOutlined,
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import 'dayjs/locale/it';
 import { autoveicoliService } from '../../services/autoveicoliService';
-import { Autoveicolo, TUTTI_TIPI_CARROZZERIA, calcolaProssimaRevisione, getIntervalliRevisione } from '../../types/Autoveicolo';
+import { Autoveicolo } from '../../types/Autoveicolo';
 import AutoveicoloForm from './AutoveicoloForm';
 import AutoveicoloDetailModal from './AutoveicoloDetailModal';
-import EnhancedDatePicker from '../common/EnhancedDatePicker';
-import getDatePickerConfig from '../../config/datePickerConfig';
 
 const AutoveicoliList: React.FC = () => {
-  const datePickerConfig = getDatePickerConfig();
-  const [autoveicoli, setAutoveicoli] = useState<Autoveicolo[]>([]);
+  // STATI MINIMI + MENU ACTIONS
+  const [allData, setAllData] = useState<Autoveicolo[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStato, setFilterStato] = useState('');
-  const [filterTipo, setFilterTipo] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
   const [showForm, setShowForm] = useState(false);
-  const [selectedAutoveicolo, setSelectedAutoveicolo] = useState<Autoveicolo | null>(null);
+  const [selectedAuto, setSelectedAuto] = useState<Autoveicolo | null>(null);
   const [showDetail, setShowDetail] = useState(false);
+  
+  // STATI MENU
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [menuAutoveicolo, setMenuAutoveicolo] = useState<Autoveicolo | null>(null);
-  
-  
-  // Stati per dialog di aggiornamento rapido
-  const [showQuickUpdate, setShowQuickUpdate] = useState(false);
-  const [quickUpdateType, setQuickUpdateType] = useState<'bollo' | 'assicurazione' | 'revisione' | null>(null);
-  const [quickUpdateValue, setQuickUpdateValue] = useState<dayjs.Dayjs | null>(null);
-  const [quickUpdateLoading, setQuickUpdateLoading] = useState(false);
-  
+  const [menuAuto, setMenuAuto] = useState<Autoveicolo | null>(null);
 
+  // FETCH DATI
   useEffect(() => {
-    fetchAutoveicoli();
+    let isCancelled = false;
+    
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        // Usa getAll con limite molto alto per ottenere tutti i dati
+        const response = await autoveicoliService.getAll({ limit: 10000 });
+        
+        if (!isCancelled) {
+          setAllData(response.data || []);
+        }
+      } catch (error) {
+        console.error('Errore caricamento:', error);
+        if (!isCancelled) {
+          setAllData([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadData();
+    
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
-  const fetchAutoveicoli = async () => {
-    try {
-      setLoading(true);
-      const response = await autoveicoliService.getAll();
-      setAutoveicoli(response.data);
-    } catch (error) {
-      console.error('Errore nel caricamento autoveicoli:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // FILTRAGGIO SEMPLICE
+  const filteredData = React.useMemo(() => {
+    if (!searchTerm.trim()) return allData;
+    
+    const term = searchTerm.toLowerCase().trim();
+    return allData.filter(auto => 
+      auto.targa?.toLowerCase().includes(term) ||
+      auto.marca?.toLowerCase().includes(term) ||
+      auto.modello?.toLowerCase().includes(term)
+    );
+  }, [allData, searchTerm]);
 
-  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(event.target.value);
-  };
+  // PAGINAZIONE SEMPLICE
+  const paginatedData = React.useMemo(() => {
+    const startIndex = page * rowsPerPage;
+    return filteredData.slice(startIndex, startIndex + rowsPerPage);
+  }, [filteredData, page, rowsPerPage]);
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, autoveicolo: Autoveicolo) => {
-    setAnchorEl(event.currentTarget);
-    setMenuAutoveicolo(autoveicolo);
-  };
+  // HANDLERS SEMPLICI
+  const handleSearchChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setSearchTerm(value);
+    setPage(0);
+  }, []);
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setMenuAutoveicolo(null);
-  };
+  const handlePageChange = React.useCallback((event: unknown, newPage: number) => {
+    setPage(newPage);
+  }, []);
 
-  const handleView = (autoveicolo: Autoveicolo) => {
-    setSelectedAutoveicolo(autoveicolo);
-    setShowDetail(true);
-    handleMenuClose();
-  };
+  const handleRowsPerPageChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  }, []);
 
-  const handleEdit = (autoveicolo: Autoveicolo) => {
-    setSelectedAutoveicolo(autoveicolo);
+  const handleEdit = React.useCallback((auto: Autoveicolo) => {
+    setSelectedAuto(auto);
     setShowForm(true);
-    handleMenuClose();
-  };
+    setAnchorEl(null);
+  }, []);
 
-  const handleDelete = async (autoveicolo: Autoveicolo) => {
+  const handleView = React.useCallback((auto: Autoveicolo) => {
+    setSelectedAuto(auto);
+    setShowDetail(true);
+    setAnchorEl(null);
+  }, []);
+
+  const handleDelete = React.useCallback(async (auto: Autoveicolo) => {
     if (window.confirm('Sei sicuro di voler eliminare questo autoveicolo?')) {
       try {
-        await autoveicoliService.delete(autoveicolo._id);
-        await fetchAutoveicoli();
+        await autoveicoliService.delete(auto._id);
+        // Ricarica dati
+        const response = await autoveicoliService.getAll({ limit: 10000 });
+        setAllData(response.data || []);
       } catch (error) {
-        console.error('Errore nella eliminazione:', error);
+        console.error('Errore eliminazione:', error);
       }
     }
-    handleMenuClose();
-  };
+    setAnchorEl(null);
+  }, []);
 
-  const handleVendi = async (autoveicolo: Autoveicolo) => {
+  const handleVendi = React.useCallback(async (auto: Autoveicolo) => {
     if (window.confirm('Sei sicuro di voler vendere questo autoveicolo?')) {
       try {
-        await autoveicoliService.vendi(autoveicolo._id);
-        await fetchAutoveicoli();
+        await autoveicoliService.vendi(auto._id);
+        // Ricarica dati
+        const response = await autoveicoliService.getAll({ limit: 10000 });
+        setAllData(response.data || []);
       } catch (error) {
-        console.error('Errore nella vendita:', error);
+        console.error('Errore vendita:', error);
       }
     }
-    handleMenuClose();
-  };
+    setAnchorEl(null);
+  }, []);
 
-  const handleDemolisci = async (autoveicolo: Autoveicolo) => {
+  const handleDemolisci = React.useCallback(async (auto: Autoveicolo) => {
     const datiDemolitore = prompt('Inserisci i dati del demolitore:');
     if (datiDemolitore !== null) {
       try {
-        await autoveicoliService.demolisci(autoveicolo._id, {
+        await autoveicoliService.demolisci(auto._id, {
           datiDemolitore,
           dataDemolizione: new Date().toISOString()
         });
-        await fetchAutoveicoli();
+        // Ricarica dati
+        const response = await autoveicoliService.getAll({ limit: 10000 });
+        setAllData(response.data || []);
       } catch (error) {
-        console.error('Errore nella demolizione:', error);
+        console.error('Errore demolizione:', error);
       }
     }
-    handleMenuClose();
-  };
+    setAnchorEl(null);
+  }, []);
 
-  const handleChiudiNoleggio = async (autoveicolo: Autoveicolo) => {
-    if (window.confirm('Sei sicuro di voler chiudere il noleggio di questo autoveicolo?')) {
+  const handleChiudiNoleggio = React.useCallback(async (auto: Autoveicolo) => {
+    if (window.confirm('Sei sicuro di voler chiudere il noleggio?')) {
       try {
-        await autoveicoliService.update(autoveicolo._id, { stato: 'Chiuso' });
-        await fetchAutoveicoli();
+        await autoveicoliService.update(auto._id, { stato: 'Chiuso' });
+        // Ricarica dati
+        const response = await autoveicoliService.getAll({ limit: 10000 });
+        setAllData(response.data || []);
       } catch (error) {
-        console.error('Errore nella chiusura noleggio:', error);
+        console.error('Errore chiusura:', error);
       }
     }
-    handleMenuClose();
-  };
+    setAnchorEl(null);
+  }, []);
 
-  // Aggiornamento rapido scadenze
-  const openQuickUpdate = (type: 'bollo' | 'assicurazione' | 'revisione', autoveicolo: Autoveicolo) => {
-    setSelectedAutoveicolo(autoveicolo);
-    setQuickUpdateType(type);
-    setQuickUpdateValue(
-      type === 'bollo' 
-        ? dayjs(autoveicolo.dataScadenzaBollo) 
-        : type === 'assicurazione' 
-        ? dayjs(autoveicolo.dataScadenzaAssicurazione)
-        : null
-    );
-    setShowQuickUpdate(true);
-    handleMenuClose();
-  };
+  const handleMenuOpen = React.useCallback((event: React.MouseEvent<HTMLElement>, auto: Autoveicolo) => {
+    setAnchorEl(event.currentTarget);
+    setMenuAuto(auto);
+  }, []);
 
-  const handleQuickUpdate = async () => {
-    if (!selectedAutoveicolo || !quickUpdateType || !quickUpdateValue) return;
+  const handleMenuClose = React.useCallback(() => {
+    setAnchorEl(null);
+    setMenuAuto(null);
+  }, []); 
 
+  const handleFormClose = React.useCallback(() => {
+    setShowForm(false);
+    setSelectedAuto(null);
+  }, []);
+
+  const handleFormSuccess = React.useCallback(async () => {
+    setShowForm(false);
+    setSelectedAuto(null);
+    
+    // Ricarica dati
     try {
-      setQuickUpdateLoading(true);
-      const updateData: Partial<Autoveicolo> = {};
-
-      if (quickUpdateType === 'bollo') {
-        updateData.dataScadenzaBollo = quickUpdateValue.toDate();
-      } else if (quickUpdateType === 'assicurazione') {
-        updateData.dataScadenzaAssicurazione = quickUpdateValue.toDate();
-        updateData.dataInizioAssicurazione = quickUpdateValue.subtract(1, 'year').toDate();
-      } else if (quickUpdateType === 'revisione') {
-        updateData.ultimaRevisione = quickUpdateValue.toDate();
-      }
-
-      await autoveicoliService.update(selectedAutoveicolo._id, updateData);
-      await fetchAutoveicoli();
-      setShowQuickUpdate(false);
+      const response = await autoveicoliService.getAll({ limit: 10000 });
+      setAllData(response.data || []);
     } catch (error) {
-      console.error('Errore nell\'aggiornamento:', error);
-    } finally {
-      setQuickUpdateLoading(false);
+      console.error('Errore ricaricamento:', error);
     }
-  };
+  }, []);
 
-  const filteredAutoveicoli = autoveicoli.filter(auto => {
-    const matchesSearch = 
-      auto.targa.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      auto.marca.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      auto.modello.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStato = filterStato === '' || auto.stato === filterStato;
-    const matchesTipo = filterTipo === '' || auto.tipoCarrozzeria === filterTipo;
-    
-    return matchesSearch && matchesStato && matchesTipo;
-  });
-
-  const getStatusChip = (stato: string) => {
-    const colors: Record<string, "primary" | "secondary" | "error" | "warning" | "info" | "success"> = {
-      'Attivo': 'success',
-      'Venduto': 'primary',
-      'Chiuso': 'warning',
-      'Demolito': 'error',
-    };
-
-    return <Chip label={stato} color={colors[stato] || 'info'} size="small" />;
-  };
-
-  // Funzione aggiornata per gli alert chips con nuova logica revisioni
-  const getAlertChips = (autoveicolo: Autoveicolo): React.ReactElement[] => {
-    const chips: React.ReactElement[] = [];
-    const oggi = dayjs();
-    const unMese = dayjs().add(30, 'day');
-    const seiMesi = dayjs().add(180, 'day');
-    
-    // Check bollo
-    if (dayjs(autoveicolo.dataScadenzaBollo).isBefore(unMese)) {
-      chips.push(
-        <Chip 
-          key="bollo" 
-          label="Bollo" 
-          color="warning" 
-          size="small" 
-          icon={<Receipt />} 
-          onClick={(e) => {
-            e.stopPropagation();
-            openQuickUpdate('bollo', autoveicolo);
-          }}
-          sx={{ cursor: 'pointer' }}
-        />
-      );
-    }
-    
-    // Check assicurazione
-    if (dayjs(autoveicolo.dataScadenzaAssicurazione).isBefore(unMese)) {
-      chips.push(
-        <Chip 
-          key="assicurazione" 
-          label="Assicurazione" 
-          color="warning" 
-          size="small" 
-          icon={<Security />} 
-          onClick={(e) => {
-            e.stopPropagation();
-            openQuickUpdate('assicurazione', autoveicolo);
-          }}
-          sx={{ cursor: 'pointer' }}
-        />
-      );
-    }
-    
-    // Check revisione - NUOVA LOGICA basata sul tipo di carrozzeria
-    const prossimaRevisione = dayjs(calcolaProssimaRevisione(autoveicolo));
-    const intervalli = getIntervalliRevisione(autoveicolo.tipoCarrozzeria);
-    
-    // Determina quando mostrare l'alert in base al tipo di revisione
-    let sogliaTempo;
-    if (intervalli.revisioniSuccessive === 1) {
-      // Per revisioni annuali, mostra alert 2 mesi prima
-      sogliaTempo = oggi.add(60, 'day');
-    } else {
-      // Per revisioni biennali/quadriennali, mostra alert quando è scaduta o entro 30 giorni
-      sogliaTempo = oggi.add(30, 'day');
-    }
-    
-    if (prossimaRevisione.isBefore(sogliaTempo)) {
-      const isUrgent = prossimaRevisione.isBefore(oggi);
-      const tipoRevisionLabel = intervalli.revisioniSuccessive === 1 ? 'Rev. Annuale' : 'Revisione';
-      
-      chips.push(
-        <Chip 
-          key="revisione" 
-          label={tipoRevisionLabel}
-          color={isUrgent ? "error" : "warning"}
-          size="small" 
-          icon={<CheckCircle />} 
-          onClick={(e) => {
-            e.stopPropagation();
-            openQuickUpdate('revisione', autoveicolo);
-          }}
-          sx={{ cursor: 'pointer' }}
-        />
-      );
-    }
-    
-    // Check titoli di proprietà (per leasing e noleggio)
-    if (autoveicolo.scadenzaTitoloProprietà && ['Leasing', 'Noleggio'].includes(autoveicolo.tipologiaAcquisto)) {
-      const dataScadenza = dayjs(autoveicolo.scadenzaTitoloProprietà);
-      if (dataScadenza.isBefore(seiMesi)) {
-        chips.push(
-          <Chip 
-            key="titolo_proprieta" 
-            label="Titolo Proprietà" 
-            color={dataScadenza.isBefore(dayjs().add(90, 'day')) ? 'error' : 'warning'}
-            size="small" 
-            icon={<ArticleOutlined />} 
-            onClick={(e) => {
-              e.stopPropagation();
-              // Potresti voler aggiungere una funzione per aggiornare anche questo
-            }}
-            sx={{ cursor: 'pointer' }}
-          />
-        );
-      }
-    }
-    
-    return chips;
-  };
-
-  // Funzione per ottenere il chip del tipo di revisione
-  const getRevisionTypeChip = (tipoCarrozzeria: Autoveicolo['tipoCarrozzeria']) => {
-    const intervalli = getIntervalliRevisione(tipoCarrozzeria);
-    
-    if (intervalli.revisioniSuccessive === 1) {
-      return <Chip label="Rev. Annuale" color="warning" size="small" />;
-    } else {
-      return <Chip label="Rev. Biennale" color="info" size="small" />;
+  const getStatusColor = (stato: string): "primary" | "success" | "warning" | "error" => {
+    switch (stato) {
+      case 'Attivo': return 'success';
+      case 'Venduto': return 'primary';
+      case 'Chiuso': return 'warning';
+      case 'Demolito': return 'error';
+      default: return 'primary';
     }
   };
 
@@ -354,6 +240,7 @@ const AutoveicoliList: React.FC = () => {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
         <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Caricamento...</Typography>
       </Box>
     );
   }
@@ -371,22 +258,20 @@ const AutoveicoliList: React.FC = () => {
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => {
-                setSelectedAutoveicolo(null);
+                setSelectedAuto(null);
                 setShowForm(true);
               }}
-              size="large"
             >
               Nuovo Autoveicolo
             </Button>
           </Box>
 
-          {/* Filtri - AGGIORNATI */}
-          <Toolbar sx={{ px: 0, gap: 2 }}>
+          <Box display="flex" gap={2} alignItems="center">
             <TextField
-              placeholder="Cerca per targa, marca o modello..."
+              placeholder="Cerca targa, marca, modello..."
               value={searchTerm}
-              onChange={handleSearch}
-              sx={{ minWidth: 300 }}
+              onChange={handleSearchChange}
+              sx={{ flexGrow: 1 }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -395,102 +280,60 @@ const AutoveicoliList: React.FC = () => {
                 ),
               }}
             />
-            <FormControl sx={{ minWidth: 150 }}>
-              <InputLabel>Stato</InputLabel>
-              <Select
-                value={filterStato}
-                label="Stato"
-                onChange={(e) => setFilterStato(e.target.value)}
-              >
-                <MenuItem value="">Tutti</MenuItem>
-                <MenuItem value="Attivo">Attivo</MenuItem>
-                <MenuItem value="Venduto">Venduto</MenuItem>
-                <MenuItem value="Chiuso">Chiuso</MenuItem>
-                <MenuItem value="Demolito">Demolito</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl sx={{ minWidth: 200 }}>
-              <InputLabel>Tipo Carrozzeria</InputLabel>
-              <Select
-                value={filterTipo}
-                label="Tipo Carrozzeria"
-                onChange={(e) => setFilterTipo(e.target.value)}
-              >
-                <MenuItem value="">Tutti</MenuItem>
-                {TUTTI_TIPI_CARROZZERIA.map((tipo) => (
-                  <MenuItem key={tipo} value={tipo}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                      <span>{tipo}</span>
-                      {getRevisionTypeChip(tipo)}
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Toolbar>
+            <Typography variant="body2" color="text.secondary">
+              {filteredData.length} di {allData.length}
+            </Typography>
+          </Box>
         </Paper>
 
-        {/* Tabella Autoveicoli */}
+        {/* Tabella */}
         <TableContainer component={Paper} elevation={2}>
           <Table>
             <TableHead>
-              <TableRow sx={{ bgcolor: 'primary.light' }}>
+              <TableRow sx={{ bgcolor: 'primary.main' }}>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Targa</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Veicolo</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Tipo</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Tipologia</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Marca</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Modello</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Anno</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Stato</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Alert</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Azioni</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredAutoveicoli.map((autoveicolo) => (
-                <TableRow key={autoveicolo._id} hover>
+              {paginatedData.map((auto, index) => (
+                <TableRow key={`${auto._id}_${index}`} hover>
                   <TableCell sx={{ fontWeight: 'medium' }}>
-                    {autoveicolo.targa}
+                    {auto.targa}
+                  </TableCell>
+                  <TableCell>{auto.marca}</TableCell>
+                  <TableCell>{auto.modello}</TableCell>
+                  <TableCell>
+                    {auto.dataImmatricolazione 
+                      ? dayjs(auto.dataImmatricolazione).format('YYYY')
+                      : '-'
+                    }
                   </TableCell>
                   <TableCell>
-                    <Box>
-                      <Typography variant="body1" fontWeight="medium">
-                        {autoveicolo.marca} {autoveicolo.modello}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {['Semirimorchio', 'Rimorchio < 3.5 ton', 'Rimorchio > 3.5 ton'].includes(autoveicolo.tipoCarrozzeria) 
-                          ? 'Rimorchio/Semirimorchio' 
-                          : `${autoveicolo.cilindrata}cc - ${autoveicolo.kw}kW`
-                        }
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Box>
-                      <Typography variant="body2" fontWeight="medium">
-                        {autoveicolo.tipoCarrozzeria}
-                      </Typography>
-                      {getRevisionTypeChip(autoveicolo.tipoCarrozzeria)}
-                    </Box>
-                  </TableCell>
-                  <TableCell>{autoveicolo.tipologiaAcquisto}</TableCell>
-                  <TableCell>{getStatusChip(autoveicolo.stato)}</TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                      {getAlertChips(autoveicolo)}
-                    </Box>
+                    <Chip 
+                      label={auto.stato} 
+                      color={getStatusColor(auto.stato)} 
+                      size="small" 
+                    />
                   </TableCell>
                   <TableCell align="right">
                     <IconButton
                       size="small"
-                      onClick={(e) => handleMenuOpen(e, autoveicolo)}
+                      onClick={(e) => handleMenuOpen(e, auto)}
+                      color="primary"
                     >
                       <MoreVertIcon />
                     </IconButton>
                   </TableCell>
                 </TableRow>
               ))}
-              {filteredAutoveicoli.length === 0 && (
+              {paginatedData.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                     <Typography color="textSecondary">
                       Nessun autoveicolo trovato
                     </Typography>
@@ -499,64 +342,57 @@ const AutoveicoliList: React.FC = () => {
               )}
             </TableBody>
           </Table>
+          
+          <TablePagination
+            rowsPerPageOptions={[25, 50, 100]}
+            component="div"
+            count={filteredData.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handlePageChange}
+            onRowsPerPageChange={handleRowsPerPageChange}
+            labelRowsPerPage="Record per pagina:"
+            labelDisplayedRows={({ from, to, count }) => 
+              `${from}-${to} di ${count}`
+            }
+          />
         </TableContainer>
 
-        {/* Menu Contestuale */}
+        {/* Menu Azioni */}
         <Menu
           anchorEl={anchorEl}
           open={Boolean(anchorEl)}
           onClose={handleMenuClose}
         >
-          <MenuItem onClick={() => handleView(menuAutoveicolo!)}>
+          <MenuItem onClick={() => menuAuto && handleView(menuAuto)}>
             <ListItemIcon>
               <VisibilityIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>Visualizza Dettagli</ListItemText>
           </MenuItem>
-          <MenuItem onClick={() => handleEdit(menuAutoveicolo!)}>
+          <MenuItem onClick={() => menuAuto && handleEdit(menuAuto)}>
             <ListItemIcon>
               <EditIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>Modifica</ListItemText>
           </MenuItem>
-          {menuAutoveicolo?.stato === 'Attivo' && (
+          {menuAuto?.stato === 'Attivo' && (
             <>
-              <MenuItem onClick={() => openQuickUpdate('bollo', menuAutoveicolo!)}>
-                <ListItemIcon>
-                  <Receipt fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>Aggiorna Bollo</ListItemText>
-              </MenuItem>
-              <MenuItem onClick={() => openQuickUpdate('assicurazione', menuAutoveicolo!)}>
-                <ListItemIcon>
-                  <Security fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>Aggiorna Assicurazione</ListItemText>
-              </MenuItem>
-              <MenuItem onClick={() => openQuickUpdate('revisione', menuAutoveicolo!)}>
-                <ListItemIcon>
-                  <CheckCircle fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>
-                  Aggiorna Revisione 
-                  {menuAutoveicolo && getRevisionTypeChip(menuAutoveicolo.tipoCarrozzeria)}
-                </ListItemText>
-              </MenuItem>
               <Divider />
-              <MenuItem onClick={() => handleVendi(menuAutoveicolo!)}>
+              <MenuItem onClick={() => menuAuto && handleVendi(menuAuto)}>
                 <ListItemIcon>
                   <SellOutlined fontSize="small" />
                 </ListItemIcon>
                 <ListItemText>Vendi</ListItemText>
               </MenuItem>
-              <MenuItem onClick={() => handleDemolisci(menuAutoveicolo!)}>
+              <MenuItem onClick={() => menuAuto && handleDemolisci(menuAuto)}>
                 <ListItemIcon>
                   <DemolisciIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText>Demolisci</ListItemText>
               </MenuItem>
-              {menuAutoveicolo?.tipologiaAcquisto === 'Noleggio' && (
-                <MenuItem onClick={() => handleChiudiNoleggio(menuAutoveicolo!)}>
+              {menuAuto?.tipologiaAcquisto === 'Noleggio' && (
+                <MenuItem onClick={() => menuAuto && handleChiudiNoleggio(menuAuto)}>
                   <ListItemIcon>
                     <ChiudiIcon fontSize="small" />
                   </ListItemIcon>
@@ -566,7 +402,7 @@ const AutoveicoliList: React.FC = () => {
             </>
           )}
           <Divider />
-          <MenuItem onClick={() => handleDelete(menuAutoveicolo!)} sx={{ color: 'error.main' }}>
+          <MenuItem onClick={() => menuAuto && handleDelete(menuAuto)} sx={{ color: 'error.main' }}>
             <ListItemIcon>
               <DeleteIcon fontSize="small" color="error" />
             </ListItemIcon>
@@ -574,108 +410,34 @@ const AutoveicoliList: React.FC = () => {
           </MenuItem>
         </Menu>
 
-        {/* Dialog Aggiornamento Rapido */}
-        <Dialog 
-          open={showQuickUpdate} 
-          onClose={() => setShowQuickUpdate(false)}
-          maxWidth="sm"
-          fullWidth
-        >
-          <DialogTitle>
-            Aggiorna {quickUpdateType === 'bollo' ? 'Bollo' : quickUpdateType === 'assicurazione' ? 'Assicurazione' : 'Revisione'}
-            {selectedAutoveicolo && quickUpdateType === 'revisione' && (
-              <Box sx={{ mt: 1 }}>
-                {getRevisionTypeChip(selectedAutoveicolo.tipoCarrozzeria)}
-              </Box>
-            )}
-          </DialogTitle>
-          <DialogContent sx={{ pt: 2 }}>
-            <Typography variant="body2" color="text.secondary" mb={2}>
-              {selectedAutoveicolo && `${selectedAutoveicolo.marca} ${selectedAutoveicolo.modello} - ${selectedAutoveicolo.targa}`}
-            </Typography>
-            <EnhancedDatePicker
-              label={`Nuova data ${quickUpdateType === 'bollo' ? 'scadenza bollo' : quickUpdateType === 'assicurazione' ? 'scadenza assicurazione' : 'ultima revisione'}`}
-              value={quickUpdateValue}
-              onChange={(newValue) => setQuickUpdateValue(newValue)}
-              fullWidth={true}
-              {...datePickerConfig}
-            />
-            {quickUpdateType === 'assicurazione' && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                La data di inizio verrà automaticamente impostata a 1 anno prima
-              </Typography>
-            )}
-            {quickUpdateType === 'revisione' && selectedAutoveicolo && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                Tipo veicolo: {selectedAutoveicolo.tipoCarrozzeria}
-                <br />
-                {getIntervalliRevisione(selectedAutoveicolo.tipoCarrozzeria).revisioniSuccessive === 1 
-                  ? 'Prossima revisione tra 1 anno' 
-                  : 'Prossima revisione tra 2 anni'}
-              </Typography>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setShowQuickUpdate(false)}>Annulla</Button>
-            <Button 
-              onClick={handleQuickUpdate} 
-              variant="contained" 
-              disabled={quickUpdateLoading || !quickUpdateValue}
-            >
-              {quickUpdateLoading ? 'Salvando...' : 'Salva'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Dialogs */}
+        {/* Dialog Form */}
         <Dialog 
           open={showForm} 
-          onClose={() => setShowForm(false)}
+          onClose={handleFormClose}
           maxWidth="lg"
           fullWidth
         >
           <AutoveicoloForm
-            autoveicolo={selectedAutoveicolo}
-            onSuccess={() => {
-              setShowForm(false);
-              fetchAutoveicoli();
-            }}
-            onCancel={() => setShowForm(false)}
+            autoveicolo={selectedAuto}
+            onSuccess={handleFormSuccess}
+            onCancel={handleFormClose}
           />
         </Dialog>
 
+        {/* Dialog Dettagli */}
         <Dialog 
           open={showDetail} 
           onClose={() => setShowDetail(false)}
           maxWidth="md"
           fullWidth
         >
-          {selectedAutoveicolo && (
+          {selectedAuto && (
             <AutoveicoloDetailModal
-              autoveicolo={selectedAutoveicolo}
+              autoveicolo={selectedAuto}
               onClose={() => setShowDetail(false)}
-              onRefresh={fetchAutoveicoli}
             />
           )}
         </Dialog>
-
-        {/* Floating Action Button for mobile */}
-        <Fab
-          color="primary"
-          aria-label="add"
-          sx={{
-            position: 'fixed',
-            bottom: 16,
-            right: 16,
-            display: { xs: 'flex', md: 'none' }
-          }}
-          onClick={() => {
-            setSelectedAutoveicolo(null);
-            setShowForm(true);
-          }}
-        >
-          <AddIcon />
-        </Fab>
       </Box>
     </LocalizationProvider>
   );
