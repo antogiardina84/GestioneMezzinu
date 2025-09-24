@@ -79,7 +79,7 @@ exports.checkActiveUser = async (req, res, next) => {
   if (!req.user.attivo) {
     return res.status(403).json({
       success: false,
-      message: "Il tuo account è stato disattivato. Contatta l'amministratore."
+      message: 'Il tuo account è stato disattivato. Contatta admin'
     });
   }
   next();
