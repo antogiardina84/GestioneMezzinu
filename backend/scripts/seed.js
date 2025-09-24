@@ -20,47 +20,12 @@ const seedData = async () => {
 
     const adminUser = await User.create([
       {
-        nome: 'Patrizia',
-        cognome: 'Cassisi',
-        email: 'p.cassisi@domusricycle.com',
-        password: 'Domus!25',
+        nome: 'Admin',
+        cognome: 'Admin',
+        email: 'admin@gestionemezzi.com',
+        password: 'Admin!123',
         ruolo: 'admin'
-      },
-      {
-        nome: 'Antonio',
-        cognome: 'Bengasi',
-        email: 'a.bengasi@domusricycle.com',
-        password: 'Domus!25',
-        ruolo: 'admin'
-      },
-      {
-        nome: 'Antonino',
-        cognome: 'Giardina',
-        email: 'a.giardina@domusricycle.com',
-        password: 'Domus!25',
-        ruolo: 'admin'
-      },
-      {
-        nome: 'Nancy',
-        cognome: 'Scuderi',
-        email: 'n.scuderi@domusricycle.com',
-        password: 'Domus!25',
-        ruolo: 'admin'
-      },
-      {
-        nome: 'Grazia',
-        cognome: 'Pappalardo',
-        email: 'g.pappalardo@domusricycle.com',
-        password: 'Domus!25',
-        ruolo: 'admin'
-      },
-      {
-        nome: 'Adriana',
-        cognome: 'Baucci',
-        email: 'a.baucci@domusricycle.com',
-        password: 'Domus!25',
-        ruolo: 'admin'
-      }
+      }      
     ]);
     const alboGestori = await AlboGestori.insertMany([
       {
