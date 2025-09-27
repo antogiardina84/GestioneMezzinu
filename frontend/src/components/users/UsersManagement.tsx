@@ -62,31 +62,91 @@ const UsersManagement: React.FC = () => {
   return (
     <AdminRoute>
       <Box>
-        {/* Header */}
-        <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ 
-            background: 'linear-gradient(45deg, #2196f3 30%, #21cbf3 90%)',
-            color: 'white',
-            p: 3,
-            borderRadius: 2,
-            mb: 3
-          }}>
-            <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <PeopleIcon /> Amministrazione Utenti
+        {/* Header in stile Odoo */}
+        <Paper 
+          elevation={0} 
+          sx={{ 
+            mb: 3,
+            backgroundColor: '#FFFFFF',
+            border: '1px solid #E0E0E0',
+            borderRadius: '3px',
+            boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.1)',
+            overflow: 'hidden'
+          }}
+        >
+          {/* Header bar viola con icona */}
+          <Box 
+            sx={{
+              backgroundColor: '#714B67',
+              color: 'white',
+              px: 3,
+              py: 2,
+              borderBottom: '1px solid #E0E0E0'
+            }}
+          >
+            <Typography 
+              variant="h6" 
+              gutterBottom
+              sx={{ 
+                fontSize: '18px',
+                fontWeight: 600,
+                margin: 0,
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 1,
+                mb: 1
+              }}
+            >
+              <PeopleIcon sx={{ fontSize: '20px' }} /> 
+              Amministrazione Utenti
             </Typography>
-            <Typography variant="body1" sx={{ opacity: 0.9 }}>
+            <Typography 
+              variant="body2" 
+              sx={{ 
+                fontSize: '13px',
+                opacity: 0.9,
+                margin: 0,
+                fontWeight: 400
+              }}
+            >
               Gestisci utenti, permessi e monitora l'attività del sistema
             </Typography>
           </Box>
 
-          {/* Tabs */}
-          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          {/* Tabs in stile Odoo */}
+          <Box 
+            sx={{ 
+              backgroundColor: '#F5F5F5',
+              borderBottom: '1px solid #E0E0E0'
+            }}
+          >
             <Tabs 
               value={tabValue} 
               onChange={handleTabChange} 
               variant={isMobile ? "scrollable" : "fullWidth"}
               scrollButtons="auto"
               aria-label="gestione utenti tabs"
+              sx={{
+                '& .MuiTabs-indicator': {
+                  backgroundColor: '#714B67',
+                  height: '2px'
+                },
+                '& .MuiTab-root': {
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  textTransform: 'none',
+                  color: '#666666',
+                  minHeight: '40px',
+                  padding: '8px 16px',
+                  '&.Mui-selected': {
+                    color: '#714B67',
+                    fontWeight: 600
+                  },
+                  '& .MuiSvgIcon-root': {
+                    fontSize: '18px'
+                  }
+                }
+              }}
             >
               <Tab 
                 label="Gestione Utenti" 
