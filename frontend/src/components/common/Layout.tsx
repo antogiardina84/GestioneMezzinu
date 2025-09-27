@@ -371,7 +371,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               textAlign: 'center'
             }}
           >
-            Versione 2.1.0
+            Versione 2.1.1
           </Typography>
         </Box>
       </Drawer>
