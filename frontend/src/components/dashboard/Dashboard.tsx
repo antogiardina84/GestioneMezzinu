@@ -236,18 +236,51 @@ const Dashboard: React.FC = () => {
   ];
 
   return (
-    <Box>
-      {/* Header */}
-      <Box mb={4} sx={{ 
-        background: 'linear-gradient(45deg, #1976d2 30%, #21cbf3 90%)',
-        color: 'white',
-        p: 3,
-        borderRadius: 2
-      }}>
-        <Typography variant="h4" gutterBottom>
+   <Box>
+    {/* Header in stile Odoo */}
+    <Box 
+      mb={4} 
+      sx={{ 
+        backgroundColor: '#FFFFFF',
+        border: '1px solid #E0E0E0',
+        borderRadius: '3px',
+        boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.1)',
+        overflow: 'hidden'
+      }}
+    >
+      {/* Header bar viola */}
+      <Box 
+        sx={{
+          backgroundColor: '#714B67',
+          color: 'white',
+          px: 3,
+          py: 1.5,
+          borderBottom: '1px solid #E0E0E0'
+        }}
+      >
+        <Typography 
+          variant="h6" 
+          sx={{ 
+            fontSize: '16px',
+            fontWeight: 600,
+            margin: 0
+          }}
+        >
           Dashboard - Gestione Mezzi
         </Typography>
-        <Typography variant="body1" sx={{ opacity: 0.9 }}>
+      </Box>
+      
+      {/* Contenuto */}
+      <Box sx={{ p: 3, backgroundColor: '#FAFAFA' }}>
+        <Typography 
+          variant="body2" 
+          sx={{ 
+            color: '#666666',
+            fontSize: '13px',
+            fontWeight: 400,
+            margin: 0
+          }}
+        >
           {new Date().toLocaleDateString('it-IT', { 
             weekday: 'long', 
             year: 'numeric', 
@@ -256,6 +289,7 @@ const Dashboard: React.FC = () => {
           })}
         </Typography>
       </Box>
+    </Box>
 
       {/* Cards Statistiche */}
       <Grid container spacing={3} mb={4}>
