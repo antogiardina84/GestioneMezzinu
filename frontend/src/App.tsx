@@ -10,6 +10,8 @@ import Login from './components/auth/LoginForm';
 import Dashboard from './components/dashboard/Dashboard';
 import AutoveicoliList from './components/autoveicoli/AutoveicoliList';
 import AlboGestoriList from './components/alboGestori/AlboGestoriList';
+import ManutezioniList from './components/manutenzioni/ManutenzioniList';
+import ManutenzioniDashboard from './components/manutenzioni/ManutenzionDashboard';
 import RENList from './components/ren/RENList';
 import UsersList from './components/users/UsersList';
 import UsersManagement  from './components/users/UsersManagement';
@@ -107,6 +109,8 @@ function App() {
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/autoveicoli" element={<AutoveicoliList />} />
                       <Route path="/albo-gestori" element={<AlboGestoriList />} />
+                      <Route path='/manutenzioni' element={<ManutezioniList />} />
+                      <Route path='/manutenzioni/dashboard' element={<ManutenzioniDashboard />} />
                       <Route path="/ren" element={<RENList />} />
                       <Route path="/users" element={<UsersManagement/>} />
                     </Routes>

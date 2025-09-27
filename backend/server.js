@@ -15,6 +15,7 @@ const authRoutes = require('./routes/auth');
 const autoveicoliRoutes = require('./routes/autoveicoli');
 const alboGestoriRoutes = require('./routes/alboGestori');
 const renRoutes = require('./routes/ren');
+const manutenzioniRoutes = require('./routes/manutenzioni'); // <-- AGGIUNTO
 const dashboardRoutes = require('./routes/dashboard');
 const usersRoutes = require('./routes/users');
 
@@ -72,54 +73,49 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // IMPORTANTE: Questa sezione deve essere PRIMA delle routes API protette
 
 app.use('/uploads', (req, res, next) => {
-  console.log(` Static file request: ${req.method} ${req.path}`);
-
-  // Normalizza il percorso
-  const normalizedPath = req.path.replace(/\\/g, '/');
-  if (normalizedPath !== req.path) {
-    console.log(` Redirecting ${req.path} to ${normalizedPath}`);
-    return res.redirect(301, `/uploads${normalizedPath}`);
+  console.log(`📁 Richiesta file statico: ${req.path}`);
+  
+  // Normalizza il path per evitare problemi con Windows/Linux
+  const safePath = req.path.replace(/\\/g, '/');
+  const fullPath = path.join(__dirname, 'uploads', safePath);
+  
+  // Verifica che il file esista
+  if (fs.existsSync(fullPath)) {
+    console.log(`✅ File trovato: ${fullPath}`);
+  } else {
+    console.log(`❌ File NON trovato: ${fullPath}`);
   }
-  // Controlla se è richiesto il download forzato
-  if (req.query.download) {
-    console.log(' Download forzato richiesto per:', req.path);
-    res.setHeader('Content-Disposition', 'attachment');
-  }
+  
   next();
 });
 
-// Servire i file statici con configurazione corretta
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
   setHeaders: (res, filePath) => {
-    console.log(` Serving file: ${path.basename(filePath)}`);
-
-    // Headers CORS per file statici
+    console.log(`📤 Servendo file: ${filePath}`);
+    
+    // Imposta headers CORS per i file
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.header('Access-Control-Allow-Methods', 'GET');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-
-    // Content-Type basato sull'estensione
+    
+    // Imposta content-type appropriato
     const ext = path.extname(filePath).toLowerCase();
     const filename = path.basename(filePath);
-
+    
     switch (ext) {
     case '.pdf':
       res.header('Content-Type', 'application/pdf');
       res.header('Content-Disposition', `inline; filename="${filename}"`);
-      console.log(` PDF headers set for: ${filename}`);
       break;
     case '.jpg':
     case '.jpeg':
       res.header('Content-Type', 'image/jpeg');
-      res.header('Content-Disposition', `inline; filename="${filename}"`);
       break;
     case '.png':
       res.header('Content-Type', 'image/png');
-      res.header('Content-Disposition', `inline; filename="${filename}"`);
       break;
     case '.gif':
       res.header('Content-Type', 'image/gif');
-      res.header('Content-Disposition', `inline; filename="${filename}"`);
       break;
     case '.doc':
       res.header('Content-Type', 'application/msword');
@@ -147,9 +143,9 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
 
 // Database connection
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log(' MongoDB connesso'))
+  .then(() => console.log('🗃️ MongoDB connesso'))
   .catch((err) => {
-    console.error(' Errore connessione MongoDB:', err);
+    console.error('❌ Errore connessione MongoDB:', err);
     process.exit(1);
   });
 
@@ -172,7 +168,7 @@ app.get('/api/debug/file/:entityType/:entityId/:filename', (req, res) => {
   const { entityType, entityId, filename } = req.params;
   const filePath = path.join(__dirname, 'uploads', entityType, entityId, filename);
 
-  console.log(` Debug file check: ${filePath}`);
+  console.log(`🔍 Debug file check: ${filePath}`);
 
   if (fs.existsSync(filePath)) {
     const stats = fs.statSync(filePath);
@@ -203,6 +199,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/autoveicoli', autoveicoliRoutes);
 app.use('/api/albo-gestori', alboGestoriRoutes);
 app.use('/api/ren', renRoutes);
+app.use('/api/manutenzioni', manutenzioniRoutes); // <-- AGGIUNTO
 app.use('/api/dashboard', dashboardRoutes);
 
 // ===================================================
@@ -259,19 +256,19 @@ const PORT = process.env.PORT || 5555;
 const HOST = '0.0.0.0';
 
 app.listen(PORT, HOST, () => {
-  console.log(` Server in esecuzione su http://${HOST}:${PORT}`);
-  console.log(` Per accesso locale: http://localhost:${PORT}`);
-  console.log(` Origini CORS consentite: ${allowedOrigins.join(', ')}`);
+  console.log(`🚀 Server in esecuzione su http://${HOST}:${PORT}`);
+  console.log(`🏠 Per accesso locale: http://localhost:${PORT}`);
+  console.log(`🌐 Origini CORS consentite: ${allowedOrigins.join(', ')}`);
 
   // Verifica directory uploads
   const uploadsDir = path.join(__dirname, 'uploads');
   if (!fs.existsSync(uploadsDir)) {
-    console.log(` Creazione directory uploads: ${uploadsDir}`);
+    console.log(`📁 Creazione directory uploads: ${uploadsDir}`);
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
-  console.log(` Directory uploads: ${uploadsDir}`);
+  console.log(`📂 Directory uploads: ${uploadsDir}`);
 
-  console.log(' Server pronto!');
+  console.log('✅ Server pronto!');
 });
 
 module.exports = app;

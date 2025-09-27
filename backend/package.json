@@ -12,7 +12,10 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "seed:manutenzioni": "node backend/scripts/seed-manutenzioni.js",
+    "setup:manutenzioni": "node backend/scripts/create-manutenzioni.js",
+    "test:manutenzioni": "jest backend/tests/manutenzioni.test.js"
   },
   "keywords": [
     "gestione",

@@ -27,14 +27,15 @@ import FileAttachmentViewer, { Attachment } from './FileAttachmentViewer';
 import { autoveicoliService } from '../../services/autoveicoliService';
 import { alboGestoriService } from '../../services/alboGestoriService';
 import { renService } from '../../services/renService';
+import { manutenzioniService } from '../../services/manutenzioniService';
 
 interface FileUploadComponentProps {
   entityId: string;
-  entityType: 'autoveicolo' | 'alboGestori' | 'ren';
+  entityType: 'autoveicolo' | 'alboGestori' | 'ren' | 'manutenzioni'; // AGGIUNTO manutenzioni
   onSuccess: () => void;
   currentFiles?: Attachment[];
   allowedTypes?: string[];
-  maxFileSize?: number; // in MB
+  maxFileSize?: number;
   maxFiles?: number;
 }
 
@@ -95,6 +96,17 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
           'Licenza',
           'Altro'
         ];
+      case 'manutenzioni':  // AGGIUNTO
+        return [
+          'Fattura',
+          'Preventivo',
+          'Ricevuta',
+          'Foto Prima',
+          'Foto Dopo',
+          'Scheda Tecnica',
+          'Garanzia',
+          'Altro'
+        ];
       default:
         return ['Altro'];
     }
@@ -109,6 +121,8 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
         return alboGestoriService;
       case 'ren':
         return renService;
+      case 'manutenzioni':  // AGGIUNTO
+        return manutenzioniService;
       default:
         throw new Error('Tipo di entità non supportato');
     }

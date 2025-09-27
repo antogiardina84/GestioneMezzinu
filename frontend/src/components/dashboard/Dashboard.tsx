@@ -1,4 +1,4 @@
-// src/components/dashboard/Dashboard.tsx - VERSIONE COMPLETA CON PASS ZTL
+// src/components/dashboard/Dashboard.tsx - VERSIONE COMPLETA CON MANUTENZIONI
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -29,18 +29,25 @@ import {
   Error,
   Assignment,
   Visibility,
+  Build,
+  Schedule,
   ArticleOutlined,
   Schedule as ScheduleIcon,
   LocalParking,
-  Info
+  Info,
+  PriorityHigh,
+  PlayArrow
 } from '@mui/icons-material';
 import { dashboardService } from '../../services/dashboardService';
+import { manutenzioniService } from '../../services/manutenzioniService';
 import { DashboardData } from '../../types/Dashboard';
+import { ManutenzioneScadenze } from '../../types/Manutenzione';
 import dayjs from 'dayjs';
 import 'dayjs/locale/it';
 
 const Dashboard: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [manutenzioniScadenze, setManutenzioniScadenze] = useState<ManutenzioneScadenze | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const navigate = useNavigate();
@@ -52,8 +59,12 @@ const Dashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const dashboardData = await dashboardService.getDashboardData();
+      const [dashboardData, manutenzioniData] = await Promise.all([
+        dashboardService.getDashboardData(),
+        manutenzioniService.getScadenze()
+      ]);
       setData(dashboardData);
+      setManutenzioniScadenze(manutenzioniData);
     } catch (err: any) {
       setError('Errore nel caricamento dei dati della dashboard');
       console.error('Dashboard error:', err);
@@ -117,6 +128,27 @@ const Dashboard: React.FC = () => {
     return <Chip label={stato} color={colors[stato] || 'info'} size="small" />;
   };
 
+  const getManutenzioneStatoIcon = (stato: string) => {
+    switch (stato) {
+      case 'Programmata': return <Schedule color="info" />;
+      case 'In corso': return <PlayArrow color="warning" />;
+      case 'Completata': return <CheckCircle color="success" />;
+      case 'Annullata': return <Error color="error" />;
+      case 'Rimandata': return <Schedule color="disabled" />;
+      default: return <Build />;
+    }
+  };
+
+  const getPrioritaColor = (priorita: string) => {
+    const colors = {
+      'Bassa': 'default' as const,
+      'Media': 'info' as const,
+      'Alta': 'warning' as const,
+      'Urgente': 'error' as const
+    };
+    return colors[priorita as keyof typeof colors];
+  };
+
   const handleViewAutoveicolo = (autoveicoloId: string) => {
     navigate(`/autoveicoli`);
   };
@@ -127,6 +159,10 @@ const Dashboard: React.FC = () => {
 
   const handleViewREN = (renId: string) => {
     navigate(`/ren`);
+  };
+
+  const handleViewManutenzione = (manutenzioneId: string) => {
+    navigate(`/manutenzioni`);
   };
 
   if (loading) {
@@ -145,11 +181,11 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (!data) {
+  if (!data || !manutenzioniScadenze) {
     return null;
   }
 
-  // Calcola alert totali includendo Pass ZTL
+  // Calcola alert totali includendo Pass ZTL e Manutenzioni
   const alertTotali = 
     data.contatori.revisioniInScadenza +
     data.contatori.bolliInScadenza +
@@ -157,12 +193,13 @@ const Dashboard: React.FC = () => {
     data.contatori.angaInScadenza +
     data.contatori.renInScadenza +
     (data.contatori.titoliProprietaInScadenza || 0) +
-    (data.contatori.passZTLInScadenza || 0);
+    (data.contatori.passZTLInScadenza || 0) +
+    (manutenzioniScadenze.scaduteEUrgenti?.length || 0);
 
   const revisioniAnnuali = data.revisioni.filter(r => r.tipoRevisione === 'Annuale');
   const revisioniBiennali = data.revisioni.filter(r => r.tipoRevisione !== 'Annuale');
 
-  // Cards statistiche aggiornate con Pass ZTL
+  // Cards statistiche aggiornate con Manutenzioni
   const statsCards = [
     {
       title: 'Mezzi Attivi',
@@ -179,19 +216,22 @@ const Dashboard: React.FC = () => {
       bgColor: alertTotali > 0 ? '#ffebee' : '#e8f5e9'
     },
     {
+      title: 'Manutenzioni',
+      value: manutenzioniScadenze.scaduteEUrgenti?.length || 0,
+      icon: <Build />,
+      color: (manutenzioniScadenze.scaduteEUrgenti?.length || 0) > 0 ? '#ff9800' : '#4caf50',
+      bgColor: (manutenzioniScadenze.scaduteEUrgenti?.length || 0) > 0 ? '#fff3e0' : '#e8f5e9',
+      subtitle: manutenzioniScadenze.prossimiTreGiorni?.length 
+        ? `${manutenzioniScadenze.prossimiTreGiorni.length} prossimi 3gg`
+        : undefined
+    },
+    {
       title: 'Revisioni',
       value: data.contatori.revisioniInScadenza,
       icon: <CheckCircle />,
       color: data.contatori.revisioniInScadenza > 0 ? '#ff9800' : '#4caf50',
       bgColor: data.contatori.revisioniInScadenza > 0 ? '#fff3e0' : '#e8f5e9',
       subtitle: revisioniAnnuali.length > 0 ? `${revisioniAnnuali.length} ann. + ${revisioniBiennali.length} bien.` : undefined
-    },
-    {
-      title: 'Pass ZTL',
-      value: data.contatori.passZTLInScadenza,
-      icon: <LocalParking />,
-      color: data.contatori.passZTLInScadenza > 0 ? '#ff9800' : '#4caf50',
-      bgColor: data.contatori.passZTLInScadenza > 0 ? '#fff3e0' : '#e8f5e9'
     }
   ];
 
@@ -224,11 +264,18 @@ const Dashboard: React.FC = () => {
             <Card sx={{ 
               bgcolor: card.bgColor,
               transition: 'transform 0.2s, box-shadow 0.2s',
+              cursor: 'pointer',
               '&:hover': {
                 transform: 'translateY(-4px)',
                 boxShadow: 6
               }
-            }}>
+            }}
+            onClick={() => {
+              if (card.title === 'Manutenzioni') navigate('/manutenzioni');
+              else if (card.title === 'Revisioni') navigate('/autoveicoli');
+              else if (card.title === 'Mezzi Attivi') navigate('/autoveicoli');
+            }}
+            >
               <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center">
                   <Box>
@@ -256,14 +303,97 @@ const Dashboard: React.FC = () => {
 
       {/* Sezione Alert */}
       <Grid container spacing={3} mb={4}>
-        {/* Pass ZTL in Scadenza - NUOVA SEZIONE */}
+        {/* Manutenzioni Urgenti - NUOVA SEZIONE */}
+        <Grid item xs={12} md={6}>
+          <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
+            <Typography variant="h6" gutterBottom color="error" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PriorityHigh /> Manutenzioni Urgenti ({manutenzioniScadenze.scaduteEUrgenti?.length || 0})
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+            {manutenzioniScadenze.scaduteEUrgenti && manutenzioniScadenze.scaduteEUrgenti.length > 0 ? (
+              <List dense>
+                {manutenzioniScadenze.scaduteEUrgenti.slice(0, 5).map((manutenzione, index) => (
+                  <ListItem key={index} sx={{ px: 0 }}>
+                    <ListItemIcon>
+                      {getManutenzioneStatoIcon(manutenzione.stato)}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {manutenzione.autoveicolo.targa}
+                          </Typography>
+                          <Chip 
+                            size="small" 
+                            label={manutenzione.tipoManutenzione}
+                            variant="outlined"
+                            color="primary"
+                          />
+                          <Chip
+                            size="small"
+                            label={manutenzione.priorita}
+                            color={getPrioritaColor(manutenzione.priorita)}
+                            sx={{
+                              fontWeight: manutenzione.priorita === 'Urgente' ? 'bold' : 'normal',
+                              ...(manutenzione.priorita === 'Urgente' && {
+                                animation: 'pulse 2s infinite',
+                                '@keyframes pulse': {
+                                  '0%': { transform: 'scale(1)' },
+                                  '50%': { transform: 'scale(1.05)' },
+                                  '100%': { transform: 'scale(1)' }
+                                }
+                              })
+                            }}
+                          />
+                        </Box>
+                      }
+                      secondary={
+                        <Box sx={{ mt: 0.5 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {manutenzione.descrizione}
+                          </Typography>
+                          <br />
+                          <Typography variant="caption" color="text.secondary">
+                            Programmata: {formatDate(manutenzione.dataProgrammata)} • 
+                            Fornitore: {manutenzione.fornitore.nome}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                    <IconButton 
+                      size="small" 
+                      color="primary"
+                      onClick={() => handleViewManutenzione(manutenzione._id)}
+                    >
+                      <Visibility />
+                    </IconButton>
+                  </ListItem>
+                ))}
+                {(manutenzioniScadenze.scaduteEUrgenti.length > 5) && (
+                  <ListItem>
+                    <ListItemText 
+                      primary={`... e altre ${manutenzioniScadenze.scaduteEUrgenti.length - 5} manutenzioni urgenti`}
+                      sx={{ textAlign: 'center', color: 'text.secondary' }}
+                    />
+                  </ListItem>
+                )}
+              </List>
+            ) : (
+              <Alert severity="success" icon={<CheckCircle />}>
+                Nessuna manutenzione urgente o scaduta
+              </Alert>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Pass ZTL in Scadenza */}
         <Grid item xs={12} md={6}>
           <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
             <Typography variant="h6" gutterBottom color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <LocalParking /> Pass ZTL in Scadenza ({data.passZTLInScadenza.length})
+              <LocalParking /> Pass ZTL in Scadenza ({data.passZTLInScadenza?.length || 0})
             </Typography>
             <Divider sx={{ mb: 2 }} />
-            {data.passZTLInScadenza.length > 0 ? (
+            {data.passZTLInScadenza && data.passZTLInScadenza.length > 0 ? (
               <List dense>
                 {data.passZTLInScadenza.slice(0, 5).map((item, index) => (
                   <ListItem key={index} sx={{ px: 0 }}>
@@ -373,7 +503,72 @@ const Dashboard: React.FC = () => {
           </Paper>
         </Grid>
 
-        {/* Altre sezioni... */}
+        {/* Prossime Manutenzioni (3 giorni) */}
+        <Grid item xs={12} md={6}>
+          <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
+            <Typography variant="h6" gutterBottom color="warning.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Schedule /> Prossime Manutenzioni ({manutenzioniScadenze.prossimiTreGiorni?.length || 0})
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+            {manutenzioniScadenze.prossimiTreGiorni && manutenzioniScadenze.prossimiTreGiorni.length > 0 ? (
+              <List dense>
+                {manutenzioniScadenze.prossimiTreGiorni.slice(0, 5).map((manutenzione, index) => (
+                  <ListItem key={index} sx={{ px: 0 }}>
+                    <ListItemIcon>
+                      {getManutenzioneStatoIcon(manutenzione.stato)}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {manutenzione.autoveicolo.targa}
+                          </Typography>
+                          <Chip 
+                            size="small" 
+                            label={manutenzione.tipoManutenzione}
+                            variant="outlined"
+                          />
+                        </Box>
+                      }
+                      secondary={
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">
+                            {manutenzione.descrizione}
+                          </Typography>
+                          <br />
+                          <Typography variant="caption" color="text.secondary">
+                            {formatDate(manutenzione.dataProgrammata)} • {manutenzione.fornitore.nome}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                    <IconButton 
+                      size="small" 
+                      color="primary"
+                      onClick={() => handleViewManutenzione(manutenzione._id)}
+                    >
+                      <Visibility />
+                    </IconButton>
+                  </ListItem>
+                ))}
+                {(manutenzioniScadenze.prossimiTreGiorni.length > 5) && (
+                  <ListItem>
+                    <ListItemText 
+                      primary={`... e altre ${manutenzioniScadenze.prossimiTreGiorni.length - 5} manutenzioni`}
+                      sx={{ textAlign: 'center', color: 'text.secondary' }}
+                    />
+                  </ListItem>
+                )}
+              </List>
+            ) : (
+              <Alert severity="info" icon={<Schedule />}>
+                Nessuna manutenzione nei prossimi 3 giorni
+              </Alert>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Bolli in Scadenza */}
         <Grid item xs={12} md={6}>
           <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
             <Typography variant="h6" gutterBottom color="warning.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -403,6 +598,7 @@ const Dashboard: React.FC = () => {
           </Paper>
         </Grid>
 
+        {/* Assicurazioni in Scadenza */}
         <Grid item xs={12} md={6}>
           <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
             <Typography variant="h6" gutterBottom color="info.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -459,7 +655,7 @@ const Dashboard: React.FC = () => {
             <Typography variant="h6" gutterBottom>Azioni Rapide</Typography>
             <Divider sx={{ mb: 2 }} />
             <Grid container spacing={2}>
-              <Grid item xs={4}>
+              <Grid item xs={3}>
                 <Card sx={{ bgcolor: '#e3f2fd', cursor: 'pointer' }} onClick={() => navigate('/autoveicoli')}>
                   <CardContent sx={{ p: 2, textAlign: 'center' }}>
                     <DirectionsCar color="primary" />
@@ -467,7 +663,15 @@ const Dashboard: React.FC = () => {
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={4}>
+              <Grid item xs={3}>
+                <Card sx={{ bgcolor: '#fff3e0', cursor: 'pointer' }} onClick={() => navigate('/manutenzioni')}>
+                  <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                    <Build color="warning" />
+                    <Typography variant="body2">Manutenzione</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={3}>
                 <Card sx={{ bgcolor: '#f3e5f5', cursor: 'pointer' }} onClick={() => navigate('/albo-gestori')}>
                   <CardContent sx={{ p: 2, textAlign: 'center' }}>
                     <Receipt color="secondary" />
@@ -475,7 +679,7 @@ const Dashboard: React.FC = () => {
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={4}>
+              <Grid item xs={3}>
                 <Card sx={{ bgcolor: '#e8f5e9', cursor: 'pointer' }} onClick={() => navigate('/ren')}>
                   <CardContent sx={{ p: 2, textAlign: 'center' }}>
                     <Assignment color="success" />
@@ -484,6 +688,131 @@ const Dashboard: React.FC = () => {
                 </Card>
               </Grid>
             </Grid>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Sezione Riepilogo Manutenzioni */}
+      <Grid container spacing={3} mt={2}>
+        <Grid item xs={12}>
+          <Paper elevation={3} sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Build /> Riepilogo Manutenzioni
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ 
+                  bgcolor: '#ffebee', 
+                  cursor: 'pointer',
+                  '&:hover': { boxShadow: 4 }
+                }} 
+                onClick={() => navigate('/manutenzioni?stato=Programmata&priorita=Urgente')}
+                >
+                  <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                    <PriorityHigh color="error" sx={{ fontSize: 32 }} />
+                    <Typography variant="h6" color="error.main">
+                      {manutenzioniScadenze.scaduteEUrgenti?.length || 0}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Urgenti/Scadute
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ 
+                  bgcolor: '#fff3e0', 
+                  cursor: 'pointer',
+                  '&:hover': { boxShadow: 4 }
+                }} 
+                onClick={() => navigate('/manutenzioni/dashboard')}
+                >
+                  <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                    <Schedule color="warning" sx={{ fontSize: 32 }} />
+                    <Typography variant="h6" color="warning.main">
+                      {manutenzioniScadenze.prossimiTreGiorni?.length || 0}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Prossimi 3 giorni
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ 
+                  bgcolor: '#e3f2fd', 
+                  cursor: 'pointer',
+                  '&:hover': { boxShadow: 4 }
+                }} 
+                onClick={() => navigate('/manutenzioni?stato=Programmata')}
+                >
+                  <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                    <ScheduleIcon color="info" sx={{ fontSize: 32 }} />
+                    <Typography variant="h6" color="info.main">
+                      {manutenzioniScadenze.prossimeScadenze?.length || 0}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Programmate
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <Card sx={{ 
+                  bgcolor: '#e8f5e9', 
+                  cursor: 'pointer',
+                  '&:hover': { boxShadow: 4 }
+                }} 
+                onClick={() => navigate('/manutenzioni?stato=In corso')}
+                >
+                  <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                    <PlayArrow color="success" sx={{ fontSize: 32 }} />
+                    <Typography variant="h6" color="success.main">
+                      {/* Calcoliamo quante sono in corso dal totale */}
+                      {(manutenzioniScadenze.scaduteEUrgenti?.filter(m => m.stato === 'In corso').length || 0) +
+                       (manutenzioniScadenze.prossimiTreGiorni?.filter(m => m.stato === 'In corso').length || 0)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      In Corso
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+
+            {/* Link veloci alla dashboard manutenzioni */}
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Accesso rapido alle funzionalità manutenzioni:
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Chip
+                  label="📊 Dashboard Completa"
+                  color="primary"
+                  variant="outlined"
+                  onClick={() => navigate('/manutenzioni/dashboard')}
+                  sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'primary.light' } }}
+                />
+                <Chip
+                  label="📋 Tutte le Manutenzioni"
+                  color="default"
+                  variant="outlined"
+                  onClick={() => navigate('/manutenzioni')}
+                  sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'grey.200' } }}
+                />
+                <Chip
+                  label="➕ Nuova Manutenzione"
+                  color="success"
+                  variant="outlined"
+                  onClick={() => navigate('/manutenzioni/new')}
+                  sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'success.light' } }}
+                />
+              </Box>
+            </Box>
           </Paper>
         </Grid>
       </Grid>

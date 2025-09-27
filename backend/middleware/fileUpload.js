@@ -13,6 +13,8 @@ const storage = multer.diskStorage({
       basePath = path.join(basePath, 'albo-gestori', req.params.id || 'common');
     } else if (req.baseUrl.includes('ren')) {
       basePath = path.join(basePath, 'ren', req.params.id || 'common');
+    } else if (req.baseUrl.includes('manutenzioni')) {
+      basePath = path.join(basePath, 'manutenzioni', req.params.id || 'common');
     } else {
       basePath = path.join(basePath, 'altri');
     }
@@ -95,7 +97,7 @@ const upload = multer({
     if (extname && mimetype) {
       return cb(null, true);
     } else {
-      cb("Errore: Il file deve essere un'immagine o un documento valido!");
+      cb('Errore: Il file deve essere una immagine o un documento valido!');
     }
   }
 });

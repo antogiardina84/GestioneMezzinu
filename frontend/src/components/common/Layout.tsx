@@ -26,6 +26,8 @@ import {
   DocumentScanner as DocumentIcon,
   Logout as LogoutIcon,
   ChevronLeft as ChevronLeftIcon,
+  Build as BuildIcon,
+  Assessment as AssessmentIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 
@@ -54,6 +56,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { text: 'Autoveicoli', icon: <CarIcon />, path: '/autoveicoli' },
     { text: 'Albo Gestori', icon: <ReceiptIcon />, path: '/albo-gestori' },
     { text: 'REN', icon: <DocumentIcon />, path: '/ren' },
+    { text: 'Manutenzioni', icon: <BuildIcon />, path: '/manutenzioni'},
+    { text: 'Dashboard Manutenzioni', icon: <AssessmentIcon />, path: '/manutenzioni/dashboard'},
     ...(user?.ruolo === 'admin' ? [
     { text: 'Gestione Utenti', icon: <PeopleIcon />, path: '/users' }
   ] : [])
