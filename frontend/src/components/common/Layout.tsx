@@ -1,5 +1,5 @@
-// src/components/common/Layout.tsx - Stile Odoo
-import React, { useState } from 'react';
+// src/components/common/Layout.tsx - Stile Odoo con Responsive Mobile
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -18,6 +18,8 @@ import {
   MenuItem,
   Divider,
   Chip,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -43,14 +45,32 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const [open, setOpen] = useState(true);
+  // Hook per responsive design
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
+  // State - drawer chiuso per default su mobile
+  const [open, setOpen] = useState(!isMobile);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { logout, user } = useAuth();
 
+  // Effect per gestire il cambio di breakpoint
+  useEffect(() => {
+    setOpen(!isMobile);
+  }, [isMobile]);
+
   const handleDrawerToggle = () => {
     setOpen(!open);
+  };
+
+  // Chiudi automaticamente il drawer su mobile dopo la navigazione
+  const handleNavigate = (path: string) => {
+    navigate(path);
+    if (isMobile) {
+      setOpen(false);
+    }
   };
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -127,31 +147,63 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      {/* AppBar in stile Odoo */}
+      {/* AppBar in stile Odoo - Responsive */}
       <AppBar
         position="fixed"
         sx={{
-          width: open ? `calc(100% - ${drawerWidth}px)` : '100%',
-          ml: open ? `${drawerWidth}px` : 0,
+          width: (open && !isMobile) ? `calc(100% - ${drawerWidth}px)` : '100%',
+          ml: (open && !isMobile) ? `${drawerWidth}px` : 0,
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           zIndex: (theme) => theme.zIndex.drawer + 1,
           backgroundColor: '#714B67',
         }}
       >
-        <Toolbar sx={{ minHeight: '48px !important' }}>
+        <Toolbar 
+          sx={{ 
+            minHeight: { xs: '56px', md: '48px' }, // Standard mobile height
+            paddingX: { xs: 1, md: 2 }, // Padding responsive
+          }}
+        >
           <IconButton
             color="inherit"
             aria-label="toggle drawer"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ mr: 2 }}
+            sx={{ 
+              mr: 2,
+              minWidth: '44px', // Touch target minimo
+              minHeight: '44px',
+            }}
           >
-            {open ? <ChevronLeftIcon /> : <MenuIcon />}
+            {(open && !isMobile) ? <ChevronLeftIcon /> : <MenuIcon />}
           </IconButton>
           
-          <HomeIcon sx={{ mr: 1 }} />
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontSize: '16px' }}>
+          <HomeIcon sx={{ mr: 1, display: { xs: 'none', sm: 'block' } }} />
+          <Typography 
+            variant="h6" 
+            noWrap 
+            component="div" 
+            sx={{ 
+              flexGrow: 1, 
+              fontSize: { xs: '14px', md: '16px' },
+              display: { xs: 'none', sm: 'block' }
+            }}
+          >
             Gestione Mezzi Domus
+          </Typography>
+
+          {/* Titolo abbreviato per mobile */}
+          <Typography 
+            variant="h6" 
+            noWrap 
+            component="div" 
+            sx={{ 
+              flexGrow: 1, 
+              fontSize: '14px',
+              display: { xs: 'block', sm: 'none' }
+            }}
+          >
+            Mezzi Domus
           </Typography>
 
           {/* User menu */}
@@ -163,6 +215,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 backgroundColor: 'rgba(255, 255, 255, 0.2)',
                 color: 'white',
                 fontSize: '11px',
+                display: { xs: 'none', sm: 'inline-flex' }, // Nascosto su mobile
               }}
             />
             <IconButton
@@ -170,13 +223,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               onClick={handleMenuClick}
               sx={{ 
                 color: 'white',
+                minWidth: '44px', // Touch target
+                minHeight: '44px',
                 '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.1)' }
               }}
             >
               <Avatar 
                 sx={{ 
-                  width: 32, 
-                  height: 32, 
+                  width: { xs: 36, md: 32 }, // Più grande su mobile
+                  height: { xs: 36, md: 32 }, 
                   backgroundColor: 'rgba(255, 255, 255, 0.2)',
                   fontSize: '12px',
                   fontWeight: 600
@@ -202,7 +257,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             PaperProps={{
               sx: {
                 mt: 1,
-                minWidth: 200,
+                minWidth: { xs: 180, md: 200 },
                 boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.15)',
                 border: '1px solid #E0E0E0',
               }
@@ -216,61 +271,67 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 {user?.email}
               </Typography>
             </Box>
-            <MenuItem onClick={handleMenuClose} sx={{ py: 1 }}>
+            <MenuItem onClick={handleMenuClose} sx={{ py: 1.5 }}>
               <ListItemIcon sx={{ minWidth: '36px !important' }}>
                 <AccountCircleIcon fontSize="small" />
               </ListItemIcon>
               <ListItemText 
                 primary="Profilo" 
-                primaryTypographyProps={{ fontSize: '13px' }}
+                primaryTypographyProps={{ fontSize: '14px' }}
               />
             </MenuItem>
-            <MenuItem onClick={handleMenuClose} sx={{ py: 1 }}>
+            <MenuItem onClick={handleMenuClose} sx={{ py: 1.5 }}>
               <ListItemIcon sx={{ minWidth: '36px !important' }}>
                 <SettingsIcon fontSize="small" />
               </ListItemIcon>
               <ListItemText 
                 primary="Impostazioni" 
-                primaryTypographyProps={{ fontSize: '13px' }}
+                primaryTypographyProps={{ fontSize: '14px' }}
               />
             </MenuItem>
             <Divider />
-            <MenuItem onClick={handleLogout} sx={{ py: 1, color: 'error.main' }}>
+            <MenuItem onClick={handleLogout} sx={{ py: 1.5, color: 'error.main' }}>
               <ListItemIcon sx={{ minWidth: '36px !important', color: 'error.main' }}>
                 <LogoutIcon fontSize="small" />
               </ListItemIcon>
               <ListItemText 
                 primary="Esci" 
-                primaryTypographyProps={{ fontSize: '13px' }}
+                primaryTypographyProps={{ fontSize: '14px' }}
               />
             </MenuItem>
           </Menu>
         </Toolbar>
       </AppBar>
       
-      {/* Sidebar in stile Odoo */}
+      {/* Sidebar in stile Odoo - Responsive */}
       <Drawer
-        variant="permanent"
+        variant={isMobile ? 'temporary' : 'permanent'}
         anchor="left"
         open={open}
+        onClose={isMobile ? () => setOpen(false) : undefined}
         sx={{
           width: open ? drawerWidth : 0,
           flexShrink: 0,
           '& .MuiDrawer-paper': {
-            width: drawerWidth,
+            width: { xs: 280, md: drawerWidth }, // Più largo su mobile
             boxSizing: 'border-box',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             border: 'none',
             backgroundColor: '#2F2F2F',
             color: '#CCCCCC',
-            transform: open ? 'translateX(0)' : `translateX(-${drawerWidth}px)`,
+            ...(isMobile ? {} : {
+              transform: open ? 'translateX(0)' : `translateX(-${drawerWidth}px)`,
+            }),
           },
+        }}
+        ModalProps={{
+          keepMounted: isMobile, // Migliora le prestazioni su mobile
         }}
       >
         {/* Logo/Header della sidebar */}
         <Box 
           sx={{ 
-            height: '48px',
+            height: { xs: '56px', md: '48px' }, // Allineato con AppBar
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -297,7 +358,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {menuItems.map((item) => (
               <ListItemButton
                 key={item.path}
-                onClick={() => navigate(item.path)}
+                onClick={() => handleNavigate(item.path)}
                 selected={isSelected(item.path)}
                 sx={{
                   mx: 1,
@@ -305,8 +366,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   borderRadius: '3px',
                   paddingLeft: '16px',
                   paddingRight: '16px',
-                  paddingTop: '8px',
-                  paddingBottom: '8px',
+                  paddingTop: { xs: '12px', md: '8px' }, // Più padding su mobile
+                  paddingBottom: { xs: '12px', md: '8px' },
+                  minHeight: { xs: '48px', md: 'auto' }, // Touch target appropriato
                   '&:hover': {
                     backgroundColor: '#404040',
                   },
@@ -340,12 +402,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   primary={item.text}
                   secondary={item.description}
                   primaryTypographyProps={{
-                    fontSize: '13px',
+                    fontSize: { xs: '14px', md: '13px' }, // Più leggibile su mobile
                     fontWeight: isSelected(item.path) ? 500 : 400,
                     color: isSelected(item.path) ? '#FFFFFF' : '#CCCCCC',
                   }}
                   secondaryTypographyProps={{
-                    fontSize: '11px',
+                    fontSize: { xs: '12px', md: '11px' },
                     color: isSelected(item.path) ? 'rgba(255, 255, 255, 0.7)' : 'rgba(204, 204, 204, 0.7)',
                   }}
                 />
@@ -376,7 +438,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </Box>
       </Drawer>
 
-      {/* Contenuto principale */}
+      {/* Contenuto principale - Responsive */}
       <Box
         component="main"
         sx={{
@@ -384,12 +446,19 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           minHeight: '100vh',
           backgroundColor: '#F0F0F0',
           transition: 'margin 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          marginLeft: open ? 0 : `-${drawerWidth}px`,
+          marginLeft: (open && !isMobile) ? 0 : (isMobile ? 0 : `-${drawerWidth}px`),
         }}
       >
-        <Toolbar sx={{ minHeight: '48px !important' }} />
-        <Box sx={{ p: 3 }}>
-          <Container maxWidth="lg">
+        <Toolbar sx={{ minHeight: { xs: '56px', md: '48px' } }} />
+        <Box sx={{ 
+          p: { xs: 1, md: 3 }, // Padding ridotto su mobile
+        }}>
+          <Container 
+            maxWidth="lg"
+            sx={{
+              paddingX: { xs: 0, md: 2 }, // No padding laterale su mobile
+            }}
+          >
             {children}
           </Container>
         </Box>

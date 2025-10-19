@@ -1,4 +1,4 @@
-// src/App.tsx - Tema stile Odoo
+// src/App.tsx - Tema stile Odoo con Responsive Mobile
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -16,8 +16,18 @@ import RENList from './components/ren/RENList';
 import UsersList from './components/users/UsersList';
 import UsersManagement from './components/users/UsersManagement';
 
-// Tema Odoo-style
+// Tema Odoo-style con ottimizzazioni responsive
 const odooTheme = createTheme({
+  // Breakpoints personalizzati per migliore controllo responsive
+  breakpoints: {
+    values: {
+      xs: 0,
+      sm: 600,
+      md: 900,
+      lg: 1200,
+      xl: 1536,
+    },
+  },
   palette: {
     mode: 'light',
     primary: {
@@ -80,44 +90,71 @@ const odooTheme = createTheme({
       fontSize: '2.2rem',
       fontWeight: 300,
       color: '#714B67',
+      '@media (max-width:768px)': {
+        fontSize: '1.8rem',
+      },
     },
     h2: {
       fontSize: '1.8rem',
       fontWeight: 300,
       color: '#714B67',
+      '@media (max-width:768px)': {
+        fontSize: '1.5rem',
+      },
     },
     h3: {
       fontSize: '1.5rem',
       fontWeight: 400,
       color: '#714B67',
+      '@media (max-width:768px)': {
+        fontSize: '1.3rem',
+      },
     },
     h4: {
       fontSize: '1.3rem',
       fontWeight: 500,
       color: '#212121',
+      '@media (max-width:768px)': {
+        fontSize: '1.2rem',
+      },
     },
     h5: {
       fontSize: '1.1rem',
       fontWeight: 500,
       color: '#212121',
+      '@media (max-width:768px)': {
+        fontSize: '1.05rem',
+      },
     },
     h6: {
       fontSize: '1rem',
       fontWeight: 600,
       color: '#212121',
+      '@media (max-width:768px)': {
+        fontSize: '0.95rem',
+      },
     },
     body1: {
       fontSize: '13px',
       lineHeight: 1.4,
+      '@media (max-width:768px)': {
+        fontSize: '14px', // Leggermente più grande su mobile per leggibilità
+      },
     },
     body2: {
       fontSize: '12px',
       lineHeight: 1.3,
+      '@media (max-width:768px)': {
+        fontSize: '13px',
+      },
     },
     button: {
       fontSize: '13px',
       fontWeight: 500,
       textTransform: 'none',
+      '@media (max-width:768px)': {
+        fontSize: '14px', // Bottoni più leggibili su mobile
+      },
     },
   },
   shape: {
@@ -158,6 +195,7 @@ const odooTheme = createTheme({
         },
       },
     },
+    // AppBar responsive
     MuiAppBar: {
       styleOverrides: {
         root: {
@@ -167,16 +205,25 @@ const odooTheme = createTheme({
             minHeight: '48px',
             paddingLeft: '16px',
             paddingRight: '16px',
+            '@media (max-width:900px)': {
+              minHeight: '56px', // Standard mobile height
+              paddingLeft: '8px',
+              paddingRight: '8px',
+            },
           },
         },
       },
     },
+    // Drawer responsive
     MuiDrawer: {
       styleOverrides: {
         paper: {
           backgroundColor: '#2F2F2F',
           color: '#CCCCCC',
           borderRight: 'none',
+          '@media (max-width:900px)': {
+            width: '280px !important', // Più largo su mobile
+          },
           '& .MuiListItemIcon-root': {
             color: '#CCCCCC',
             minWidth: '40px',
@@ -184,6 +231,9 @@ const odooTheme = createTheme({
           '& .MuiListItemText-primary': {
             fontSize: '13px',
             fontWeight: 400,
+            '@media (max-width:768px)': {
+              fontSize: '14px', // Più leggibile su mobile
+            },
           },
           '& .MuiListItemButton-root': {
             paddingLeft: '16px',
@@ -192,6 +242,11 @@ const odooTheme = createTheme({
             paddingBottom: '8px',
             margin: '2px 8px',
             borderRadius: '3px',
+            '@media (max-width:768px)': {
+              paddingTop: '12px',
+              paddingBottom: '12px',
+              minHeight: '48px', // Touch target appropriato
+            },
             '&:hover': {
               backgroundColor: '#404040',
             },
@@ -201,6 +256,17 @@ const odooTheme = createTheme({
                 backgroundColor: '#875A7B',
               },
             },
+          },
+        },
+      },
+    },
+    // Container responsive
+    MuiContainer: {
+      styleOverrides: {
+        root: {
+          '@media (max-width:768px)': {
+            paddingLeft: '8px !important',
+            paddingRight: '8px !important',
           },
         },
       },
@@ -222,6 +288,7 @@ const odooTheme = createTheme({
         },
       },
     },
+    // Button responsive
     MuiButton: {
       styleOverrides: {
         root: {
@@ -231,6 +298,11 @@ const odooTheme = createTheme({
           borderRadius: '3px',
           padding: '6px 16px',
           minHeight: '32px',
+          '@media (max-width:768px)': {
+            minHeight: '44px', // Touch target minimo
+            fontSize: '14px',
+            padding: '8px 16px',
+          },
         },
         contained: {
           boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.2)',
@@ -248,6 +320,7 @@ const odooTheme = createTheme({
         },
       },
     },
+    // Table responsive
     MuiTableHead: {
       styleOverrides: {
         root: {
@@ -259,6 +332,10 @@ const odooTheme = createTheme({
             textTransform: 'uppercase',
             borderBottom: '1px solid #E0E0E0',
             padding: '8px 16px',
+            '@media (max-width:768px)': {
+              padding: '8px 4px',
+              fontSize: '11px',
+            },
           },
         },
       },
@@ -269,6 +346,23 @@ const odooTheme = createTheme({
           fontSize: '13px',
           padding: '8px 16px',
           borderBottom: '1px solid #F0F0F0',
+          '@media (max-width:768px)': {
+            padding: '8px 4px',
+            fontSize: '12px',
+          },
+        },
+      },
+    },
+    MuiTableContainer: {
+      styleOverrides: {
+        root: {
+          '@media (max-width:768px)': {
+            marginLeft: '-8px',
+            marginRight: '-8px',
+            '& .MuiTable-root': {
+              minWidth: '600px', // Permette scroll orizzontale
+            },
+          },
         },
       },
     },
@@ -284,6 +378,7 @@ const odooTheme = createTheme({
         },
       },
     },
+    // Chip responsive
     MuiChip: {
       styleOverrides: {
         root: {
@@ -291,6 +386,10 @@ const odooTheme = createTheme({
           fontSize: '11px',
           fontWeight: 500,
           borderRadius: '12px',
+          '@media (max-width:768px)': {
+            height: '26px',
+            fontSize: '12px',
+          },
         },
         colorSuccess: {
           backgroundColor: '#E8F5E8',
@@ -306,11 +405,17 @@ const odooTheme = createTheme({
         },
       },
     },
+    // Card responsive
     MuiCard: {
       styleOverrides: {
         root: {
           boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.1)',
           borderRadius: '3px',
+          '& .MuiCardContent-root': {
+            '@media (max-width:768px)': {
+              padding: '12px !important',
+            },
+          },
         },
       },
     },
@@ -320,19 +425,32 @@ const odooTheme = createTheme({
           backgroundColor: '#F5F5F5',
           borderBottom: '1px solid #E0E0E0',
           padding: '12px 16px',
+          '@media (max-width:768px)': {
+            padding: '8px 12px',
+          },
           '& .MuiCardHeader-title': {
             fontSize: '14px',
             fontWeight: 600,
             color: '#212121',
+            '@media (max-width:768px)': {
+              fontSize: '13px',
+            },
           },
         },
       },
     },
+    // TextField responsive
     MuiTextField: {
       styleOverrides: {
         root: {
+          '@media (max-width:768px)': {
+            marginBottom: '8px',
+          },
           '& .MuiOutlinedInput-root': {
             fontSize: '13px',
+            '@media (max-width:768px)': {
+              fontSize: '16px', // Previene zoom su iOS
+            },
             '& fieldset': {
               borderColor: '#D0D0D0',
             },
@@ -346,6 +464,9 @@ const odooTheme = createTheme({
           '& .MuiInputLabel-root': {
             fontSize: '13px',
             color: '#666666',
+            '@media (max-width:768px)': {
+              fontSize: '14px',
+            },
             '&.Mui-focused': {
               color: '#714B67',
             },
@@ -357,6 +478,9 @@ const odooTheme = createTheme({
       styleOverrides: {
         root: {
           fontSize: '13px',
+          '@media (max-width:768px)': {
+            fontSize: '16px', // Previene zoom su iOS
+          },
         },
       },
     },
@@ -364,6 +488,9 @@ const odooTheme = createTheme({
       styleOverrides: {
         label: {
           fontSize: '13px',
+          '@media (max-width:768px)': {
+            fontSize: '14px',
+          },
         },
       },
     },
@@ -372,14 +499,21 @@ const odooTheme = createTheme({
         root: {
           fontSize: '13px',
           borderRadius: '3px',
+          '@media (max-width:768px)': {
+            fontSize: '14px',
+          },
         },
       },
     },
+    // Tabs responsive
     MuiTabs: {
       styleOverrides: {
         root: {
           borderBottom: '1px solid #E0E0E0',
           minHeight: '40px',
+          '@media (max-width:768px)': {
+            minHeight: '48px',
+          },
         },
         indicator: {
           backgroundColor: '#714B67',
@@ -396,8 +530,48 @@ const odooTheme = createTheme({
           minHeight: '40px',
           padding: '8px 16px',
           color: '#666666',
+          '@media (max-width:768px)': {
+            minHeight: '48px',
+            fontSize: '14px',
+            padding: '12px 16px',
+            minWidth: '120px', // Larghezza minima per touch
+          },
           '&.Mui-selected': {
             color: '#714B67',
+          },
+        },
+      },
+    },
+    // FAB responsive - già ottimizzato nel codice esistente
+    MuiFab: {
+      styleOverrides: {
+        root: {
+          '@media (max-width:768px)': {
+            bottom: '20px !important',
+            right: '20px !important',
+            zIndex: 1300,
+          },
+        },
+      },
+    },
+    // IconButton responsive
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          '@media (max-width:768px)': {
+            padding: '12px', // Touch target più grande
+          },
+        },
+      },
+    },
+    // Dialog responsive
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          '@media (max-width:768px)': {
+            margin: '16px',
+            width: 'calc(100% - 32px)',
+            maxHeight: 'calc(100% - 32px)',
           },
         },
       },

@@ -11,3 +11,333 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* ========================================
+   CSS RESPONSIVE AGGIUNTIVO PER MOBILE
+   ======================================== */
+
+/* Ottimizzazioni per tablet (768px - 1024px) */
+@media (max-width: 1024px) and (min-width: 769px) {
+  /* Riduci padding sui contenitori per tablet */
+  .MuiContainer-root {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  
+  /* Ottimizza le tabelle per tablet */
+  .MuiTableContainer-root {
+    margin-left: -12px;
+    margin-right: -12px;
+  }
+}
+
+/* Ottimizzazioni principali per mobile (max-width: 768px) */
+@media (max-width: 768px) {
+  /* === CONTENITORI E LAYOUT === */
+  .MuiContainer-root {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+  
+  /* Riduci il padding delle card */
+  .MuiCard-root .MuiCardContent-root {
+    padding: 12px !important;
+  }
+  
+  .MuiCard-root .MuiCardActions-root {
+    padding: 8px 12px !important;
+  }
+  
+  /* === BOTTONI E INTERAZIONI === */
+  .MuiButton-root {
+    min-height: 44px !important; /* Touch target minimo raccomandato */
+    font-size: 14px !important;
+    padding: 8px 16px !important;
+  }
+  
+  .MuiIconButton-root {
+    padding: 12px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  
+  /* === TABELLE === */
+  .MuiTableContainer-root {
+    margin-left: -8px;
+    margin-right: -8px;
+    /* Scroll orizzontale smooth */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .MuiTable-root {
+    min-width: 600px !important; /* Permette scroll orizzontale */
+  }
+  
+  .MuiTableCell-root {
+    padding: 8px 4px !important;
+    font-size: 12px !important;
+  }
+  
+  .MuiTableCell-head {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    padding: 8px 4px !important;
+  }
+  
+  /* === TIPOGRAFIA === */
+  .MuiTypography-h6 {
+    font-size: 1.1rem !important;
+  }
+  
+  .MuiTypography-h5 {
+    font-size: 1.15rem !important;
+  }
+  
+  .MuiTypography-h4 {
+    font-size: 1.25rem !important;
+  }
+  
+  /* === FORM E INPUT === */
+  .MuiTextField-root {
+    margin-bottom: 8px !important;
+  }
+  
+  .MuiOutlinedInput-root {
+    font-size: 16px !important; /* Previene zoom automatico su iOS */
+  }
+  
+  .MuiInputLabel-root {
+    font-size: 14px !important;
+  }
+  
+  .MuiSelect-select {
+    font-size: 16px !important; /* Previene zoom automatico su iOS */
+  }
+  
+  /* === CHIP E BADGE === */
+  .MuiChip-root {
+    height: 26px !important;
+    font-size: 12px !important;
+  }
+  
+  /* === FAB BUTTON === */
+  .MuiFab-root {
+    bottom: 20px !important;
+    right: 20px !important;
+    z-index: 1300 !important;
+    width: 56px !important;
+    height: 56px !important;
+  }
+  
+  /* === DIALOG E MODAL === */
+  .MuiDialog-paper {
+    margin: 16px !important;
+    width: calc(100% - 32px) !important;
+    max-height: calc(100% - 32px) !important;
+  }
+  
+  .MuiDialogTitle-root {
+    padding: 16px 16px 8px 16px !important;
+    font-size: 1.1rem !important;
+  }
+  
+  .MuiDialogContent-root {
+    padding: 8px 16px !important;
+  }
+  
+  .MuiDialogActions-root {
+    padding: 8px 16px 16px 16px !important;
+    gap: 8px;
+  }
+  
+  /* === TABS === */
+  .MuiTabs-root {
+    min-height: 48px !important;
+  }
+  
+  .MuiTab-root {
+    min-height: 48px !important;
+    font-size: 14px !important;
+    padding: 12px 16px !important;
+    min-width: 120px !important;
+  }
+  
+  /* === MENU E DROPDOWN === */
+  .MuiMenu-paper {
+    max-width: calc(100vw - 32px) !important;
+  }
+  
+  .MuiMenuItem-root {
+    min-height: 44px !important;
+    padding: 12px 16px !important;
+    font-size: 14px !important;
+  }
+  
+  /* === ALERT E NOTIFICATION === */
+  .MuiAlert-root {
+    font-size: 14px !important;
+    padding: 12px 16px !important;
+  }
+  
+  /* === ACCORDION === */
+  .MuiAccordionSummary-root {
+    min-height: 48px !important;
+    padding: 0 16px !important;
+  }
+  
+  .MuiAccordionDetails-root {
+    padding: 8px 16px 16px 16px !important;
+  }
+  
+  /* === STEPPER === */
+  .MuiStepLabel-root {
+    padding: 8px !important;
+  }
+  
+  /* === BREADCRUMBS === */
+  .MuiBreadcrumbs-root {
+    font-size: 14px !important;
+  }
+  
+  /* === PAGINATION === */
+  .MuiPaginationItem-root {
+    min-width: 44px !important;
+    height: 44px !important;
+    margin: 0 2px !important;
+  }
+}
+
+/* Ottimizzazioni per schermi molto piccoli (max-width: 480px) */
+@media (max-width: 480px) {
+  /* === LAYOUT ULTRA COMPATTO === */
+  .MuiContainer-root {
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
+  
+  .MuiBox-root {
+    padding: 8px !important;
+  }
+  
+  /* === TABELLE ULTRA COMPATTE === */
+  .MuiTableCell-root {
+    padding: 4px 2px !important;
+    font-size: 11px !important;
+  }
+  
+  .MuiTableCell-head {
+    font-size: 10px !important;
+    padding: 6px 2px !important;
+  }
+  
+  /* === CHIP PIÙ PICCOLI === */
+  .MuiChip-root {
+    height: 24px !important;
+    font-size: 11px !important;
+    padding: 0 8px !important;
+  }
+  
+  /* === BOTTONI COMPATTI === */
+  .MuiButton-root {
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+  }
+  
+  /* === TITOLI PIÙ PICCOLI === */
+  .MuiTypography-h6 {
+    font-size: 1rem !important;
+  }
+  
+  .MuiTypography-h5 {
+    font-size: 1.1rem !important;
+  }
+  
+  /* === DIALOG FULL SCREEN === */
+  .MuiDialog-paper {
+    margin: 8px !important;
+    width: calc(100% - 16px) !important;
+    max-height: calc(100% - 16px) !important;
+  }
+  
+  /* === FAB PIÙ PICCOLO === */
+  .MuiFab-root {
+    width: 48px !important;
+    height: 48px !important;
+    bottom: 16px !important;
+    right: 16px !important;
+  }
+  
+  /* === SIDEBAR PIÙ COMPATTA === */
+  .MuiDrawer-paper {
+    width: 260px !important;
+  }
+  
+  .MuiListItemButton-root {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+/* === LANDSCAPE MOBILE (altezza < 500px) === */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Riduci altezze per landscape mobile */
+  .MuiAppBar-root .MuiToolbar-root {
+    min-height: 48px !important;
+  }
+  
+  .MuiListItemButton-root {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+    min-height: 40px !important;
+  }
+  
+  .MuiButton-root {
+    min-height: 36px !important;
+    padding: 6px 12px !important;
+  }
+  
+  .MuiTab-root {
+    min-height: 40px !important;
+    padding: 8px 12px !important;
+  }
+}
+
+/* === MIGLIORAMENTI PER ACCESSIBILITÀ === */
+@media (prefers-reduced-motion: reduce) {
+  /* Riduci animazioni per utenti che le preferiscono ridotte */
+  .MuiDrawer-paper,
+  .MuiAppBar-root,
+  .MuiButton-root,
+  .MuiCard-root {
+    transition: none !important;
+  }
+}
+
+/* === DARK MODE SUPPORT (se necessario in futuro) === */
+@media (prefers-color-scheme: dark) {
+  /* Placeholder per future implementazioni dark mode */
+  /* Manterrà il tema Odoo chiaro per ora */
+}
+
+/* === PRINT STYLES === */
+@media print {
+  /* Nascondi elementi non necessari in stampa */
+  .MuiAppBar-root,
+  .MuiDrawer-root,
+  .MuiFab-root,
+  .MuiSpeedDial-root {
+    display: none !important;
+  }
+  
+  /* Ottimizza layout per stampa */
+  .MuiContainer-root {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  
+  .MuiPaper-root {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+  }
+}
