@@ -189,7 +189,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               display: { xs: 'none', sm: 'block' }
             }}
           >
-            Gestione Mezzi Domus
+            Gestione Mezzi
           </Typography>
 
           {/* Titolo abbreviato per mobile */}
@@ -203,7 +203,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               display: { xs: 'block', sm: 'none' }
             }}
           >
-            Mezzi Domus
+            Mezzi
           </Typography>
 
           {/* User menu */}
