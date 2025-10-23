@@ -1,8 +1,9 @@
-// backend/controllers/manutenzioni.js - VERSIONE CORRETTA
+// backend/controllers/manutenzioni.js - VERSIONE CORRETTA CON FIX OBJECTID
 const Manutenzione = require('../models/Manutenzione');
 const Autoveicolo = require('../models/Autoveicolo');
 const ErrorResponse = require('../utils/errorResponse');
 const asyncHandler = require('../middleware/asyncHandler');
+const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs');
 
@@ -301,21 +302,35 @@ exports.getScadenze = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Get statistiche manutenzioni
+// @desc    Get statistiche manutenzioni  
 // @route   GET /api/manutenzioni/statistiche
 // @access  Private
 exports.getStatistiche = asyncHandler(async (req, res, next) => {
-  const anno = req.query.anno || new Date().getFullYear();
+  const anno = parseInt(req.query.anno) || new Date().getFullYear();
+  const autoveicoloId = req.query.autoveicolo;
+  
   const inizioAnno = new Date(anno, 0, 1);
-  const fineAnno = new Date(anno, 11, 31);
+  const fineAnno = new Date(anno, 11, 31, 23, 59, 59, 999);
 
+  // Costruisci il filtro base
+  const filtroBase = {
+    dataEsecuzione: { $gte: inizioAnno, $lte: fineAnno },
+    stato: 'Completata'
+  };
+
+  // FIX: Usa new mongoose.Types.ObjectId()
+  if (autoveicoloId) {
+    try {
+      filtroBase.autoveicolo = new mongoose.Types.ObjectId(autoveicoloId);
+    } catch (e) {
+      // Fallback per versioni mongoose più vecchie
+      filtroBase.autoveicolo = mongoose.Types.ObjectId(autoveicoloId);
+    }
+  }
+
+  // Statistiche per tipo
   const statistichePerTipo = await Manutenzione.aggregate([
-    {
-      $match: {
-        dataEsecuzione: { $gte: inizioAnno, $lte: fineAnno },
-        stato: 'Completata'
-      }
-    },
+    { $match: filtroBase },
     {
       $group: {
         _id: '$tipoManutenzione',
@@ -336,16 +351,13 @@ exports.getStatistiche = asyncHandler(async (req, res, next) => {
           }
         }
       }
-    }
+    },
+    { $sort: { costoTotale: -1 } }
   ]);
 
+  // Statistiche per fornitore
   const statistichePerFornitore = await Manutenzione.aggregate([
-    {
-      $match: {
-        dataEsecuzione: { $gte: inizioAnno, $lte: fineAnno },
-        stato: 'Completata'
-      }
-    },
+    { $match: filtroBase },
     {
       $group: {
         _id: '$fornitore.nome',
@@ -371,54 +383,50 @@ exports.getStatistiche = asyncHandler(async (req, res, next) => {
     { $limit: 10 }
   ]);
 
-  const statistichePerAutoveicolo = await Manutenzione.aggregate([
-    {
-      $match: {
-        dataEsecuzione: { $gte: inizioAnno, $lte: fineAnno },
-        stato: 'Completata'
-      }
-    },
-    {
-      $group: {
-        _id: '$autoveicolo',
-        count: { $sum: 1 },
-        costoTotale: {
-          $sum: {
-            $add: [
-              '$costi.manodopera',
-              '$costi.ricambi',
-              '$costi.altri',
-              {
-                $multiply: [
-                  { $add: ['$costi.manodopera', '$costi.ricambi', '$costi.altri'] },
-                  { $divide: ['$costi.iva', 100] }
-                ]
-              }
-            ]
+  // Statistiche per autoveicolo - SALTA SE FILTRIAMO PER UN MEZZO
+  let statistichePerAutoveicolo = [];
+  
+  if (!autoveicoloId) {
+    statistichePerAutoveicolo = await Manutenzione.aggregate([
+      { $match: filtroBase },
+      {
+        $group: {
+          _id: '$autoveicolo',
+          count: { $sum: 1 },
+          costoTotale: {
+            $sum: {
+              $add: [
+                '$costi.manodopera',
+                '$costi.ricambi',
+                '$costi.altri',
+                {
+                  $multiply: [
+                    { $add: ['$costi.manodopera', '$costi.ricambi', '$costi.altri'] },
+                    { $divide: ['$costi.iva', 100] }
+                  ]
+                }
+              ]
+            }
           }
         }
-      }
-    },
-    { $sort: { costoTotale: -1 } },
-    { $limit: 10 },
-    {
-      $lookup: {
-        from: 'autoveicolis',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'autoveicolo'
-      }
-    },
-    { $unwind: '$autoveicolo' }
-  ]);
+      },
+      { $sort: { costoTotale: -1 } },
+      { $limit: 10 },
+      {
+        $lookup: {
+          from: 'autoveicolis',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'autoveicolo'
+        }
+      },
+      { $unwind: '$autoveicolo' }
+    ]);
+  }
 
+  // Costi mensili
   const costiMensili = await Manutenzione.aggregate([
-    {
-      $match: {
-        dataEsecuzione: { $gte: inizioAnno, $lte: fineAnno },
-        stato: 'Completata'
-      }
-    },
+    { $match: filtroBase },
     {
       $group: {
         _id: { $month: '$dataEsecuzione' },
@@ -448,7 +456,9 @@ exports.getStatistiche = asyncHandler(async (req, res, next) => {
       statistichePerTipo,
       statistichePerFornitore,
       statistichePerAutoveicolo,
-      costiMensili
+      costiMensili,
+      filtroAttivo: autoveicoloId ? true : false,
+      autoveicoloFiltrato: autoveicoloId || null
     }
   });
 });

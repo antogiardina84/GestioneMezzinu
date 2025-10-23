@@ -15,7 +15,7 @@ const authRoutes = require('./routes/auth');
 const autoveicoliRoutes = require('./routes/autoveicoli');
 const alboGestoriRoutes = require('./routes/alboGestori');
 const renRoutes = require('./routes/ren');
-const manutenzioniRoutes = require('./routes/manutenzioni'); // <-- AGGIUNTO
+const manutenzioniRoutes = require('./routes/manutenzioni');
 const dashboardRoutes = require('./routes/dashboard');
 const usersRoutes = require('./routes/users');
 
@@ -24,19 +24,38 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
-// Configurazione CORS
+// Configurazione CORS - AGGIORNATA CON PORTE FRONTEND
 const allowedOrigins = [
+  // Backend
   'http://localhost:5555',
   'http://192.168.1.249:5555',
   'http://192.168.1.253:5555',
-  'http://192.168.1.63:5555'
+  'http://192.168.1.63:5555',
+  
+  // Frontend - Porta 3000 (default React)
+  'http://localhost:3000',
+  'http://192.168.1.249:3000',
+  'http://192.168.1.253:3000',
+  'http://192.168.1.63:3000',
+  
+  // Frontend - Porta 3001 (configurata nel tuo package.json)
+  'http://localhost:3001',
+  'http://192.168.1.249:3001',
+  'http://192.168.1.253:3001',
+  'http://192.168.1.63:3001'
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Permetti richieste senza origin (tipo Postman, curl, etc)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.log('⚠️ Origine bloccata da CORS:', origin);
       callback(new Error('Origine non permessa da CORS: ' + origin));
     }
   },
@@ -69,8 +88,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // ================================
 // GESTIONE FILE STATICI - ACCESSO PUBBLICO
 // ================================
-
-// IMPORTANTE: Questa sezione deve essere PRIMA delle routes API protette
 
 app.use('/uploads', (req, res, next) => {
   console.log(`📁 Richiesta file statico: ${req.path}`);
@@ -199,7 +216,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/autoveicoli', autoveicoliRoutes);
 app.use('/api/albo-gestori', alboGestoriRoutes);
 app.use('/api/ren', renRoutes);
-app.use('/api/manutenzioni', manutenzioniRoutes); // <-- AGGIUNTO
+app.use('/api/manutenzioni', manutenzioniRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 // ===================================================

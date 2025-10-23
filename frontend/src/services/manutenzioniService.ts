@@ -1,3 +1,4 @@
+// frontend/src/services/manutenzioniService.ts - VERSIONE COMPLETA CON FILTRO AUTOVEICOLO
 import api from './api';
 import { Manutenzione, ManutenzioneFilters, ManutenzioneScadenze, ManutenzioneStatistiche } from '../types/Manutenzione';
 
@@ -12,7 +13,19 @@ interface ListResponse<T> {
   data: T[];
 }
 
+// ============================================
+// NUOVA INTERFACCIA PER I PARAMETRI STATISTICHE
+// ============================================
+interface StatisticheParams {
+  anno?: number;
+  autoveicolo?: string; // NUOVO: Parametro per filtrare per mezzo
+}
+
 export const manutenzioniService = {
+  // ============================================
+  // TUTTE LE FUNZIONI ESISTENTI RIMANGONO INVARIATE
+  // ============================================
+  
   async getAll(params?: ManutenzioneFilters): Promise<ListResponse<Manutenzione>> {
     const response = await api.get('/manutenzioni', { params });
     return response.data as ListResponse<Manutenzione>;
@@ -84,9 +97,30 @@ export const manutenzioniService = {
     return (response.data as any).data;
   },
 
-  async getStatistiche(anno?: number): Promise<ManutenzioneStatistiche> {
-    const params = anno ? { anno } : {};
-    const response = await api.get('/manutenzioni/statistiche', { params });
+  // ============================================
+  // QUESTA È LA FUNZIONE MODIFICATA
+  // ============================================
+  async getStatistiche(params: StatisticheParams = {}): Promise<ManutenzioneStatistiche> {
+    // Costruisci i query parameters
+    const queryParams = new URLSearchParams();
+    
+    // Aggiungi anno se presente
+    if (params.anno) {
+      queryParams.append('anno', params.anno.toString());
+    }
+    
+    // NUOVO: Aggiungi autoveicolo se presente
+    if (params.autoveicolo) {
+      queryParams.append('autoveicolo', params.autoveicolo);
+    }
+    
+    // Costruisci l'URL con i parametri
+    const queryString = queryParams.toString();
+    const url = `/manutenzioni/statistiche${queryString ? `?${queryString}` : ''}`;
+    
+    console.log('Richiesta statistiche con URL:', url);
+    
+    const response = await api.get(url);
     return (response.data as any).data;
   }
 };

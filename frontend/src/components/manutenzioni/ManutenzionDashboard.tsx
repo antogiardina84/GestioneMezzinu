@@ -1,4 +1,4 @@
-// src/components/manutenzioni/DashboardManutenzioni.tsx - VERSIONE COMPLETA CORRETTA
+// src/components/manutenzioni/ManutenzionDashboard.tsx - CON FILTRO MEZZO
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
@@ -46,7 +46,8 @@ import {
   PriorityHigh,
   PlayArrow,
   Pause,
-  Cancel
+  Cancel,
+  FilterList
 } from '@mui/icons-material';
 import { 
   PieChart, 
@@ -66,6 +67,7 @@ import 'dayjs/locale/it';
 import { useNavigate } from 'react-router-dom';
 
 import { manutenzioniService } from '../../services/manutenzioniService';
+import { autoveicoliService } from '../../services/autoveicoliService';
 import { ManutenzioneScadenze, ManutenzioneStatistiche } from '../../types/Manutenzione';
 
 // Setup dayjs
@@ -81,6 +83,11 @@ const DashboardManutenzioni: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  
+  // NUOVO: Stati per il filtro mezzo
+  const [autoveicoli, setAutoveicoli] = useState<any[]>([]);
+  const [selectedMezzo, setSelectedMezzo] = useState<string>(''); // '' = tutti i mezzi
+  const [mezzoFiltrato, setMezzoFiltrato] = useState<any>(null);
 
   // Generiamo gli anni disponibili (dal 2020 all'anno corrente)
   const availableYears = Array.from(
@@ -88,13 +95,42 @@ const DashboardManutenzioni: React.FC = () => {
     (_, i) => 2020 + i
   ).reverse();
 
+  // NUOVO: Carica lista autoveicoli al mount
+  useEffect(() => {
+    const fetchAutoveicoli = async () => {
+      try {
+        const response = await autoveicoliService.getAll({ stato: 'Attivo' });
+        setAutoveicoli(response.data || []);
+      } catch (err) {
+        console.error('Errore nel caricamento autoveicoli:', err);
+      }
+    };
+    fetchAutoveicoli();
+  }, []);
+
+  // MODIFICATO: Aggiungi selectedMezzo alle dipendenze
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // Prepara i parametri per le statistiche
+      const statsParams: any = { anno: selectedYear };
+      if (selectedMezzo) {
+        statsParams.autoveicolo = selectedMezzo;
+      }
+      
       const [scadenzeData, statisticheData] = await Promise.all([
         manutenzioniService.getScadenze(),
-        manutenzioniService.getStatistiche(selectedYear)
+        manutenzioniService.getStatistiche(statsParams)
       ]);
+      
+      // NUOVO: Se c'è un filtro mezzo, trova i dettagli del mezzo
+      if (selectedMezzo) {
+        const mezzoDetails = autoveicoli.find(a => a._id === selectedMezzo);
+        setMezzoFiltrato(mezzoDetails);
+      } else {
+        setMezzoFiltrato(null);
+      }
       
       setScadenze(scadenzeData);
       setStatistiche(statisticheData);
@@ -104,11 +140,13 @@ const DashboardManutenzioni: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedYear]);
+  }, [selectedYear, selectedMezzo, autoveicoli]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (autoveicoli.length > 0) {
+      fetchData();
+    }
+  }, [fetchData, autoveicoli.length]);
 
   const formatDate = (date: string | Date) => {
     if (!date) return '-';
@@ -169,245 +207,278 @@ const DashboardManutenzioni: React.FC = () => {
     });
   };
 
+  // NUOVO: Filtra le scadenze per mezzo se selezionato
+  const getScadenzeFiltrate = () => {
+    if (!scadenze) return { scaduteEUrgenti: [], prossimiTreGiorni: [] };
+    
+    if (!selectedMezzo) return scadenze;
+    
+    return {
+      scaduteEUrgenti: scadenze.scaduteEUrgenti?.filter(
+        m => m.autoveicolo._id === selectedMezzo
+      ) || [],
+      prossimiTreGiorni: scadenze.prossimiTreGiorni?.filter(
+        m => m.autoveicolo._id === selectedMezzo
+      ) || [],
+      prossimeScadenze: scadenze.prossimeScadenze?.filter(
+        m => m.autoveicolo._id === selectedMezzo
+      ) || []
+    };
+  };
+
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
-        <CircularProgress size={60} />
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress />
       </Box>
     );
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box p={3}>
         <Alert severity="error">{error}</Alert>
-        <Button onClick={fetchData} sx={{ mt: 2 }}>
-          Riprova
-        </Button>
       </Box>
     );
   }
 
+  const scadenzeFiltrate = getScadenzeFiltrate();
+
   return (
     <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h4" component="h1" gutterBottom>
+      {/* Header con filtri */}
+      <Grid container spacing={3} sx={{ mb: 3 }} alignItems="center">
+        <Grid item xs={12} md={6}>
+          <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Build fontSize="large" color="primary" />
             Dashboard Manutenzioni
           </Typography>
-          <Typography variant="subtitle1" color="text.secondary">
-            Panoramica completa delle manutenzioni aziendali
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>Anno</InputLabel>
-            <Select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              label="Anno"
+          {mezzoFiltrato && (
+            <Typography variant="subtitle1" color="text.secondary">
+              Filtrato per: <strong>{mezzoFiltrato.targa}</strong> - {mezzoFiltrato.marca} {mezzoFiltrato.modello}
+            </Typography>
+          )}
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+            {/* NUOVO: Selector mezzo */}
+            <FormControl sx={{ minWidth: 250 }} size="small">
+              <InputLabel>Filtra per Mezzo</InputLabel>
+              <Select
+                value={selectedMezzo}
+                onChange={(e) => setSelectedMezzo(e.target.value)}
+                label="Filtra per Mezzo"
+                startAdornment={<DirectionsCar sx={{ mr: 1, color: 'text.secondary' }} />}
+              >
+                <MenuItem value="">
+                  <em>Tutti i Mezzi</em>
+                </MenuItem>
+                {autoveicoli.map((auto) => (
+                  <MenuItem key={auto._id} value={auto._id}>
+                    {auto.targa} - {auto.marca} {auto.modello}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl sx={{ minWidth: 120 }} size="small">
+              <InputLabel>Anno</InputLabel>
+              <Select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                label="Anno"
+              >
+                {availableYears.map((year) => (
+                  <MenuItem key={year} value={year}>
+                    {year}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => navigate('/manutenzioni/new')}
             >
-              {availableYears.map(year => (
-                <MenuItem key={year} value={year}>{year}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => navigate('/manutenzioni')}
+              Nuova
+            </Button>
+          </Box>
+        </Grid>
+      </Grid>
+
+      {/* Badge filtro attivo */}
+      {selectedMezzo && (
+        <Alert severity="info" sx={{ mb: 3 }} icon={<FilterList />}>
+          Stai visualizzando le statistiche per il mezzo <strong>{mezzoFiltrato?.targa}</strong>.
+          Le statistiche per autoveicolo non sono disponibili quando si filtra per un singolo mezzo.
+          <Button 
+            size="small" 
+            onClick={() => setSelectedMezzo('')}
+            sx={{ ml: 2 }}
           >
-            Gestisci Manutenzioni
+            Rimuovi Filtro
           </Button>
-        </Box>
-      </Box>
+        </Alert>
+      )}
 
-      <Grid container spacing={3}>
-        {/* KPI Cards */}
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%', background: 'linear-gradient(135deg, #f44336, #d32f2f)' }}>
-            <CardContent sx={{ textAlign: 'center', color: 'white' }}>
-              <PriorityHigh sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h4" component="div">
-                {scadenze?.scaduteEUrgenti?.length || 0}
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Urgenti/Scadute
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%', background: 'linear-gradient(135deg, #ff9800, #f57c00)' }}>
-            <CardContent sx={{ textAlign: 'center', color: 'white' }}>
-              <Schedule sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h4" component="div">
-                {scadenze?.prossimiTreGiorni?.length || 0}
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Prossimi 3 giorni
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%', background: 'linear-gradient(135deg, #2196f3, #1976d2)' }}>
-            <CardContent sx={{ textAlign: 'center', color: 'white' }}>
-              <Build sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h4" component="div">
-                {scadenze?.prossimeScadenze?.length || 0}
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Prossimo mese
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%', background: 'linear-gradient(135deg, #4caf50, #388e3c)' }}>
-            <CardContent sx={{ textAlign: 'center', color: 'white' }}>
-              <Euro sx={{ fontSize: 40, mb: 1 }} />
-              <Typography variant="h4" component="div" sx={{ fontSize: '1.5rem' }}>
-                {formatCurrency(calcolaTotaleAnno())}
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Costi Totali {selectedYear}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Statistiche secondarie */}
-        <Grid item xs={12} md={4}>
-          <Card sx={{ height: '100%' }}>
+      {/* Cards riepilogative */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={3}>
+          <Card sx={{ backgroundColor: '#fff3e0', height: '100%' }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                <Assessment sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Statistiche Rapide
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Media mensile:
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h4" color="warning.main">
+                    {scadenzeFiltrate.scaduteEUrgenti?.length || 0}
                   </Typography>
-                  <Typography variant="body1" fontWeight="bold">
-                    {formatCurrency(calcolaMediaMensile())}
+                  <Typography variant="body2" color="text.secondary">
+                    Scadute/Urgenti
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Tipi manutenzione:
-                  </Typography>
-                  <Typography variant="body1" fontWeight="bold">
-                    {statistiche?.statistichePerTipo?.length || 0}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Fornitori attivi:
-                  </Typography>
-                  <Typography variant="body1" fontWeight="bold">
-                    {statistiche?.statistichePerFornitore?.length || 0}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Veicoli con manutenzioni:
-                  </Typography>
-                  <Typography variant="body1" fontWeight="bold">
-                    {statistiche?.statistichePerAutoveicolo?.length || 0}
-                  </Typography>
-                </Box>
+                <Warning sx={{ fontSize: 48, color: 'warning.main', opacity: 0.3 }} />
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Manutenzioni urgenti e scadute */}
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12} md={3}>
+          <Card sx={{ backgroundColor: '#e3f2fd', height: '100%' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h4" color="info.main">
+                    {scadenzeFiltrate.prossimiTreGiorni?.length || 0}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Prossimi 3 Giorni
+                  </Typography>
+                </Box>
+                <Schedule sx={{ fontSize: 48, color: 'info.main', opacity: 0.3 }} />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <Card sx={{ backgroundColor: '#f3e5f5', height: '100%' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h4" color="primary.main">
+                    {formatCurrency(calcolaTotaleAnno())}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Costo Totale {selectedYear}
+                  </Typography>
+                </Box>
+                <Euro sx={{ fontSize: 48, color: 'primary.main', opacity: 0.3 }} />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <Card sx={{ backgroundColor: '#e8f5e9', height: '100%' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h4" color="success.main">
+                    {formatCurrency(calcolaMediaMensile())}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Media Mensile
+                  </Typography>
+                </Box>
+                <CalendarMonth sx={{ fontSize: 48, color: 'success.main', opacity: 0.3 }} />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Sezione grafici */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        {/* Manutenzioni scadute/urgenti */}
+        <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2, height: 400 }}>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Warning color="error" />
-              Manutenzioni Urgenti e Scadute
+              <Warning color="warning" />
+              Manutenzioni Urgenti
             </Typography>
-            {scadenze?.scaduteEUrgenti && scadenze.scaduteEUrgenti.length > 0 ? (
+            {scadenzeFiltrate.scaduteEUrgenti && scadenzeFiltrate.scaduteEUrgenti.length > 0 ? (
               <List sx={{ maxHeight: 320, overflow: 'auto' }}>
-                {scadenze.scaduteEUrgenti.map((manutenzione) => (
-                  <ListItem 
-                    key={manutenzione._id} 
-                    sx={{ 
-                      border: '1px solid', 
-                      borderColor: manutenzione.priorita === 'Urgente' ? 'error.main' : 'warning.main',
-                      borderRadius: 1, 
+                {scadenzeFiltrate.scaduteEUrgenti.map((manutenzione) => (
+                  <ListItem
+                    key={manutenzione._id}
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 1,
                       mb: 1,
-                      backgroundColor: manutenzione.priorita === 'Urgente' ? 'error.light' : 'warning.light',
-                      '&:hover': {
-                        backgroundColor: manutenzione.priorita === 'Urgente' ? 'error.main' : 'warning.main',
-                        '& .MuiTypography-root': { color: 'white' },
-                        '& .MuiChip-root': { backgroundColor: 'rgba(255,255,255,0.2)' }
-                      }
+                      backgroundColor: manutenzione.priorita === 'Urgente' ? '#ffebee' : 'background.paper'
                     }}
                   >
                     <ListItemIcon>
-                      {getStatoIcon(manutenzione.stato)}
+                      <Avatar 
+                        sx={{ 
+                          bgcolor: getPrioritaColor(manutenzione.priorita),
+                          width: 32,
+                          height: 32
+                        }}
+                      >
+                        {getStatoIcon(manutenzione.stato)}
+                      </Avatar>
                     </ListItemIcon>
                     <ListItemText
                       primary={
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box>
                           <Typography variant="body2" fontWeight="bold">
-                            {manutenzione.autoveicolo.targa} - {manutenzione.descrizione}
+                            {manutenzione.autoveicolo.targa} - {manutenzione.tipoManutenzione}
                           </Typography>
-                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                            <Chip
-                              size="small"
-                              label={manutenzione.priorita}
-                              sx={{ 
-                                backgroundColor: getPrioritaColor(manutenzione.priorita), 
-                                color: 'white',
-                                fontWeight: 'bold'
-                              }}
-                            />
-                            <Tooltip title="Visualizza dettagli">
-                              <IconButton 
-                                size="small"
-                                onClick={() => navigate(`/manutenzioni/${manutenzione._id}`)}
-                              >
-                                <Visibility fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
+                          <Typography variant="caption" color="text.secondary">
+                            {manutenzione.descrizione}
+                          </Typography>
                         </Box>
                       }
                       secondary={
-                        <Typography variant="caption" sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Programmata: {formatDate(manutenzione.dataProgrammata)}</span>
-                          <span>Fornitore: {manutenzione.fornitore.nome}</span>
-                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+                          <Chip 
+                            label={manutenzione.priorita}
+                            size="small"
+                            sx={{ 
+                              backgroundColor: getPrioritaColor(manutenzione.priorita),
+                              color: 'white',
+                              fontWeight: 'bold'
+                            }}
+                          />
+                          <Typography variant="caption">
+                            {formatDate(manutenzione.dataProgrammata)}
+                          </Typography>
+                        </Box>
                       }
                     />
+                    <Tooltip title="Visualizza">
+                      <IconButton 
+                        size="small"
+                        onClick={() => navigate(`/manutenzioni/${manutenzione._id}`)}
+                      >
+                        <Visibility />
+                      </IconButton>
+                    </Tooltip>
                   </ListItem>
                 ))}
               </List>
             ) : (
               <Box sx={{ 
                 display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
+                flexDirection: 'column',
                 justifyContent: 'center', 
-                height: 200,
-                backgroundColor: 'success.light',
-                borderRadius: 2,
-                border: '2px solid',
-                borderColor: 'success.main'
+                alignItems: 'center', 
+                height: 320 
               }}>
-                <CheckCircle sx={{ fontSize: 60, color: 'success.main', mb: 2 }} />
-                <Typography variant="h6" color="success.dark" fontWeight="bold">
-                  Ottimo lavoro!
-                </Typography>
+                <CheckCircle sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
                 <Typography variant="body2" color="success.dark">
                   Nessuna manutenzione urgente o scaduta
                 </Typography>
@@ -422,6 +493,14 @@ const DashboardManutenzioni: React.FC = () => {
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <TrendingUp />
               Andamento Costi Mensili ({selectedYear})
+              {selectedMezzo && mezzoFiltrato && (
+                <Chip 
+                  label={`${mezzoFiltrato.targa}`} 
+                  size="small" 
+                  color="primary" 
+                  variant="outlined"
+                />
+              )}
             </Typography>
             {statistiche?.costiMensili && statistiche.costiMensili.length > 0 ? (
               <ResponsiveContainer width="100%" height={320}>
@@ -476,12 +555,16 @@ const DashboardManutenzioni: React.FC = () => {
               }}>
                 <Typography variant="body1" color="text.secondary">
                   Nessun dato disponibile per l'anno {selectedYear}
+                  {selectedMezzo && ` e il mezzo ${mezzoFiltrato?.targa}`}
                 </Typography>
               </Box>
             )}
           </Paper>
         </Grid>
+      </Grid>
 
+      {/* Grafici secondari */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
         {/* Grafico manutenzioni per tipo */}
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2, height: 400 }}>
@@ -490,30 +573,26 @@ const DashboardManutenzioni: React.FC = () => {
               Manutenzioni per Tipo ({selectedYear})
             </Typography>
             {statistiche?.statistichePerTipo && statistiche.statistichePerTipo.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={320}>
                 <PieChart>
                   <Pie
                     data={statistiche.statistichePerTipo}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={(props: any) => {
-                      const { name, percent } = props;
-                      return `${name}\n${(percent * 100).toFixed(0)}%`;
-                    }}
-                    outerRadius={80}
+                    label={({ _id, count }) => `${_id} (${count})`}
+                    outerRadius={100}
                     fill="#8884d8"
                     dataKey="count"
-                    nameKey="_id"
                   >
                     {statistiche.statistichePerTipo.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <RechartsTooltip 
-                    formatter={(value: number, name: string) => [
-                      `${value} manutenzioni`, 
-                      name
+                    formatter={(value: number, name: string, props: any) => [
+                      `${value} manutenzioni - ${formatCurrency(props.payload.costoTotale)}`,
+                      props.payload._id
                     ]}
                   />
                 </PieChart>
@@ -523,85 +602,50 @@ const DashboardManutenzioni: React.FC = () => {
                 display: 'flex', 
                 justifyContent: 'center', 
                 alignItems: 'center', 
-                height: 280,
+                height: 320,
                 backgroundColor: 'grey.50',
                 borderRadius: 2
               }}>
                 <Typography variant="body2" color="text.secondary">
-                  Nessun dato per l'anno {selectedYear}
+                  Nessun dato disponibile
                 </Typography>
               </Box>
             )}
           </Paper>
         </Grid>
 
-        {/* Top fornitori */}
-        <Grid item xs={12} md={6}>
+        {/* Grafico manutenzioni per fornitore */}
+        <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2, height: 400 }}>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Person />
-              Top Fornitori per Costo ({selectedYear})
+              Top Fornitori ({selectedYear})
             </Typography>
             {statistiche?.statistichePerFornitore && statistiche.statistichePerFornitore.length > 0 ? (
-              <TableContainer sx={{ maxHeight: 320 }}>
-                <Table stickyHeader size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>#</TableCell>
-                      <TableCell>Fornitore</TableCell>
-                      <TableCell align="center">Manutenzioni</TableCell>
-                      <TableCell align="right">Costo Totale</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {statistiche.statistichePerFornitore.map((fornitore, index) => (
-                      <TableRow 
-                        key={fornitore._id}
-                        hover
-                        sx={{ 
-                          '&:nth-of-type(odd)': { backgroundColor: 'grey.50' },
-                          '&:hover': { backgroundColor: 'primary.light' }
-                        }}
-                      >
-                        <TableCell>
-                          <Avatar 
-                            sx={{ 
-                              width: 24, 
-                              height: 24, 
-                              backgroundColor: index < 3 ? ['#FFD700', '#C0C0C0', '#CD7F32'][index] : 'primary.main',
-                              fontSize: 12,
-                              fontWeight: 'bold'
-                            }}
-                          >
-                            {index + 1}
-                          </Avatar>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={index < 3 ? 'bold' : 'normal'}>
-                            {fornitore._id}
+              <List sx={{ maxHeight: 320, overflow: 'auto' }}>
+                {statistiche.statistichePerFornitore.slice(0, 5).map((fornitore, index) => (
+                  <ListItem key={index} sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <ListItemIcon>
+                      <Avatar sx={{ bgcolor: COLORS[index % COLORS.length] }}>
+                        {index + 1}
+                      </Avatar>
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={fornitore._id}
+                      secondary={
+                        <Box>
+                          <Typography variant="caption">
+                            {fornitore.count} interventi
                           </Typography>
-                        </TableCell>
-                        <TableCell align="center">
-                          <Chip 
-                            size="small" 
-                            label={fornitore.count}
-                            color={index < 3 ? 'primary' : 'default'}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography 
-                            variant="body2" 
-                            fontWeight="bold" 
-                            color={index < 3 ? 'primary.main' : 'text.primary'}
-                          >
+                          <Typography variant="body2" color="primary" fontWeight="bold">
                             {formatCurrency(fornitore.costoTotale)}
                           </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
             ) : (
               <Box sx={{ 
                 display: 'flex', 
@@ -612,190 +656,127 @@ const DashboardManutenzioni: React.FC = () => {
                 borderRadius: 2
               }}>
                 <Typography variant="body2" color="text.secondary">
-                  Nessun fornitore per l'anno {selectedYear}
+                  Nessun dato disponibile
                 </Typography>
               </Box>
             )}
           </Paper>
         </Grid>
 
-        {/* Top veicoli per costo */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2, height: 400 }}>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <DirectionsCar />
-              Top Veicoli per Costo Manutenzione ({selectedYear})
-            </Typography>
-            {statistiche?.statistichePerAutoveicolo && statistiche.statistichePerAutoveicolo.length > 0 ? (
-              <TableContainer sx={{ maxHeight: 320 }}>
-                <Table stickyHeader size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>#</TableCell>
-                      <TableCell>Veicolo</TableCell>
-                      <TableCell align="center">Manutenzioni</TableCell>
-                      <TableCell align="right">Costo Totale</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {statistiche.statistichePerAutoveicolo.map((item, index) => (
-                      <TableRow 
-                        key={item._id}
-                        hover
-                        sx={{ 
-                          '&:nth-of-type(odd)': { backgroundColor: 'grey.50' },
-                          '&:hover': { backgroundColor: 'warning.light' }
-                        }}
-                      >
-                        <TableCell>
-                          <Avatar 
-                            sx={{ 
-                              width: 24, 
-                              height: 24, 
-                              backgroundColor: index < 3 ? ['#FF6B6B', '#4ECDC4', '#45B7D1'][index] : 'warning.main',
-                              fontSize: 12,
-                              fontWeight: 'bold'
-                            }}
-                          >
-                            {index + 1}
-                          </Avatar>
-                        </TableCell>
-                        <TableCell>
+        {/* Grafico manutenzioni per autoveicolo - NASCOSTO SE FILTRIAMO PER UN MEZZO */}
+        {!selectedMezzo && (
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 2, height: 400 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <DirectionsCar />
+                Manutenzioni per Mezzo ({selectedYear})
+              </Typography>
+              {statistiche?.statistichePerAutoveicolo && statistiche.statistichePerAutoveicolo.length > 0 ? (
+                <List sx={{ maxHeight: 320, overflow: 'auto' }}>
+                  {statistiche.statistichePerAutoveicolo.slice(0, 5).map((auto, index) => (
+                    <ListItem 
+                      key={index} 
+                      sx={{ 
+                        borderBottom: '1px solid', 
+                        borderColor: 'divider',
+                        cursor: 'pointer',
+                        '&:hover': { backgroundColor: 'action.hover' }
+                      }}
+                      onClick={() => setSelectedMezzo(auto._id)}
+                    >
+                      <ListItemIcon>
+                        <Avatar sx={{ bgcolor: COLORS[index % COLORS.length] }}>
+                          <DirectionsCar />
+                        </Avatar>
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={`${auto.autoveicolo.targa} - ${auto.autoveicolo.marca} ${auto.autoveicolo.modello}`}
+                        secondary={
                           <Box>
-                            <Typography variant="body2" fontWeight="bold">
-                              {item.autoveicolo.targa}
+                            <Typography variant="caption">
+                              {auto.count} interventi
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {item.autoveicolo.marca} {item.autoveicolo.modello}
+                            <Typography variant="body2" color="primary" fontWeight="bold">
+                              {formatCurrency(auto.costoTotale)}
                             </Typography>
                           </Box>
-                        </TableCell>
-                        <TableCell align="center">
-                          <Chip 
-                            size="small" 
-                            label={item.count}
-                            color={index < 3 ? 'warning' : 'default'}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography 
-                            variant="body2" 
-                            fontWeight="bold" 
-                            color={index < 3 ? 'warning.dark' : 'text.primary'}
-                          >
-                            {formatCurrency(item.costoTotale)}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            ) : (
-              <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
-                height: 320,
-                backgroundColor: 'grey.50',
-                borderRadius: 2
-              }}>
-                <Typography variant="body2" color="text.secondary">
-                  Nessun veicolo per l'anno {selectedYear}
-                </Typography>
-              </Box>
-            )}
-          </Paper>
-        </Grid>
+                        }
+                      />
+                      <Tooltip title="Filtra per questo mezzo">
+                        <IconButton size="small">
+                          <FilterList />
+                        </IconButton>
+                      </Tooltip>
+                    </ListItem>
+                  ))}
+                </List>
+              ) : (
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  alignItems: 'center', 
+                  height: 320,
+                  backgroundColor: 'grey.50',
+                  borderRadius: 2
+                }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Nessun dato disponibile
+                  </Typography>
+                </Box>
+              )}
+            </Paper>
+          </Grid>
+        )}
+      </Grid>
 
-        {/* Prossime manutenzioni nei prossimi 3 giorni */}
+      {/* Prossimi interventi */}
+      <Grid container spacing={3}>
         <Grid item xs={12}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CalendarMonth />
-              Prossime Manutenzioni (3 giorni)
+              <Schedule />
+              Prossimi Interventi (3 Giorni)
             </Typography>
-            {scadenze?.prossimiTreGiorni && scadenze.prossimiTreGiorni.length > 0 ? (
+            {scadenzeFiltrate.prossimiTreGiorni && scadenzeFiltrate.prossimiTreGiorni.length > 0 ? (
               <TableContainer>
                 <Table>
                   <TableHead>
                     <TableRow>
+                      <TableCell>Stato</TableCell>
                       <TableCell>Veicolo</TableCell>
                       <TableCell>Tipo</TableCell>
                       <TableCell>Descrizione</TableCell>
-                      <TableCell>Data Programmata</TableCell>
+                      <TableCell>Data</TableCell>
                       <TableCell>Priorità</TableCell>
-                      <TableCell>Fornitore</TableCell>
-                      <TableCell>Stato</TableCell>
                       <TableCell>Azioni</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {scadenze.prossimiTreGiorni.map((manutenzione) => (
+                    {scadenzeFiltrate.prossimiTreGiorni.map((manutenzione) => (
                       <TableRow key={manutenzione._id} hover>
                         <TableCell>
-                          <Box>
-                            <Typography variant="body2" fontWeight="bold">
-                              {manutenzione.autoveicolo.targa}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {manutenzione.autoveicolo.marca} {manutenzione.autoveicolo.modello}
-                            </Typography>
-                          </Box>
+                          {getStatoIcon(manutenzione.stato)}
                         </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight="bold">
+                            {manutenzione.autoveicolo.targa}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {manutenzione.autoveicolo.marca} {manutenzione.autoveicolo.modello}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{manutenzione.tipoManutenzione}</TableCell>
+                        <TableCell>{manutenzione.descrizione}</TableCell>
+                        <TableCell>{formatDate(manutenzione.dataProgrammata)}</TableCell>
                         <TableCell>
                           <Chip 
-                            size="small" 
-                            label={manutenzione.tipoManutenzione}
-                            variant="outlined"
-                            color="primary"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Tooltip title={manutenzione.descrizione}>
-                            <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                              {manutenzione.descrizione}
-                            </Typography>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell>
-                          <Box>
-                            <Typography variant="body2">
-                              {formatDate(manutenzione.dataProgrammata)}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {dayjs(manutenzione.dataProgrammata).fromNow()}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            size="small"
                             label={manutenzione.priorita}
+                            size="small"
                             sx={{ 
-                              backgroundColor: getPrioritaColor(manutenzione.priorita), 
-                              color: 'white',
-                              fontWeight: 'bold'
+                              backgroundColor: getPrioritaColor(manutenzione.priorita),
+                              color: 'white'
                             }}
                           />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {manutenzione.fornitore.nome}
-                          </Typography>
-                          {manutenzione.fornitore.telefono && (
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              {manutenzione.fornitore.telefono}
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {getStatoIcon(manutenzione.stato)}
-                            <Typography variant="body2">
-                              {manutenzione.stato}
-                            </Typography>
-                          </Box>
                         </TableCell>
                         <TableCell>
                           <Tooltip title="Visualizza dettagli">
@@ -816,203 +797,10 @@ const DashboardManutenzioni: React.FC = () => {
               <Alert severity="info" sx={{ mt: 2 }}>
                 <Typography variant="body2">
                   Nessuna manutenzione programmata per i prossimi 3 giorni
+                  {selectedMezzo && ` per il mezzo ${mezzoFiltrato?.targa}`}
                 </Typography>
               </Alert>
             )}
-          </Paper>
-        </Grid>
-
-        {/* Insight e raccomandazioni */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2, backgroundColor: 'primary.light' }}>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              💡 Insights e Raccomandazioni
-            </Typography>
-            <Grid container spacing={2}>
-              {/* Media costi per veicolo */}
-              {statistiche?.statistichePerAutoveicolo && statistiche.statistichePerAutoveicolo.length > 0 && (
-                <Grid item xs={12} md={4}>
-                  <Box sx={{ p: 2, backgroundColor: 'white', borderRadius: 2 }}>
-                    <Typography variant="subtitle2" color="primary" gutterBottom>
-                      📊 Costo Medio per Veicolo
-                    </Typography>
-                    <Typography variant="h6" color="primary.dark">
-                      {formatCurrency(
-                        statistiche.statistichePerAutoveicolo.reduce((sum, item) => sum + item.costoTotale, 0) / 
-                        statistiche.statistichePerAutoveicolo.length
-                      )}
-                    </Typography>
-                  </Box>
-                </Grid>
-              )}
-
-              {/* Fornitore più economico */}
-              {statistiche?.statistichePerFornitore && statistiche.statistichePerFornitore.length > 0 && (
-                <Grid item xs={12} md={4}>
-                  <Box sx={{ p: 2, backgroundColor: 'white', borderRadius: 2 }}>
-                    <Typography variant="subtitle2" color="success.main" gutterBottom>
-                      💰 Fornitore più Conveniente
-                    </Typography>
-                    <Typography variant="body2" fontWeight="bold">
-                      {statistiche.statistichePerFornitore[statistiche.statistichePerFornitore.length - 1]?._id}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Media: {formatCurrency(
-                        statistiche.statistichePerFornitore[statistiche.statistichePerFornitore.length - 1]?.costoTotale / 
-                        statistiche.statistichePerFornitore[statistiche.statistichePerFornitore.length - 1]?.count || 0
-                      )}
-                    </Typography>
-                  </Box>
-                </Grid>
-              )}
-
-              {/* Trend mensile */}
-              {statistiche?.costiMensili && statistiche.costiMensili.length >= 2 && (
-                <Grid item xs={12} md={4}>
-                  <Box sx={{ p: 2, backgroundColor: 'white', borderRadius: 2 }}>
-                    <Typography variant="subtitle2" color="info.main" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      📈 Trend Ultimo Mese
-                      {(() => {
-                        const ultimi2Mesi = statistiche.costiMensili.slice(-2);
-                        if (ultimi2Mesi.length < 2) return null;
-                        const trend = ultimi2Mesi[1].costoTotale - ultimi2Mesi[0].costoTotale;
-                        return trend > 0 ? 
-                          <TrendingUp color="error" fontSize="small" /> : 
-                          <TrendingDown color="success" fontSize="small" />;
-                      })()}
-                    </Typography>
-                    {(() => {
-                      const ultimi2Mesi = statistiche.costiMensili.slice(-2);
-                      if (ultimi2Mesi.length < 2) {
-                        return <Typography variant="body2">Dati insufficienti</Typography>;
-                      }
-                      const trend = ultimi2Mesi[1].costoTotale - ultimi2Mesi[0].costoTotale;
-                      const percentuale = Math.abs((trend / ultimi2Mesi[0].costoTotale) * 100);
-                      return (
-                        <>
-                          <Typography variant="body2" fontWeight="bold" color={trend > 0 ? 'error.main' : 'success.main'}>
-                            {trend > 0 ? '+' : ''}{formatCurrency(trend)}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {trend > 0 ? 'Aumento' : 'Diminuzione'} del {percentuale.toFixed(1)}%
-                          </Typography>
-                        </>
-                      );
-                    })()}
-                  </Box>
-                </Grid>
-              )}
-            </Grid>
-
-            {/* Raccomandazioni specifiche */}
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                🎯 Raccomandazioni Specifiche:
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {scadenze?.scaduteEUrgenti && scadenze.scaduteEUrgenti.length > 0 && (
-                  <Chip 
-                    icon={<Warning />}
-                    label={`${scadenze.scaduteEUrgenti.length} manutenzioni urgenti da gestire`}
-                    color="error"
-                    variant="filled"
-                  />
-                )}
-                
-                {statistiche?.statistichePerAutoveicolo && 
-                 statistiche.statistichePerAutoveicolo.length > 0 &&
-                 statistiche.statistichePerAutoveicolo[0].count > 5 && (
-                  <Chip 
-                    icon={<DirectionsCar />}
-                    label={`Veicolo ${statistiche.statistichePerAutoveicolo[0].autoveicolo.targa} richiede attenzione`}
-                    color="warning"
-                    variant="filled"
-                  />
-                )}
-
-                {calcolaMediaMensile() > 1000 && (
-                  <Chip 
-                    icon={<Euro />}
-                    label="Valuta contratti di manutenzione preventiva"
-                    color="info"
-                    variant="filled"
-                  />
-                )}
-
-                {statistiche?.statistichePerFornitore && statistiche.statistichePerFornitore.length > 3 && (
-                  <Chip 
-                    icon={<Person />}
-                    label="Considera consolidamento fornitori"
-                    color="default"
-                    variant="filled"
-                  />
-                )}
-              </Box>
-            </Box>
-          </Paper>
-        </Grid>
-
-        {/* Quick Actions */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2, backgroundColor: 'grey.50' }}>
-            <Typography variant="h6" gutterBottom>
-              🚀 Azioni Rapide
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-              <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={() => navigate('/manutenzioni/new')}
-                size="large"
-              >
-                Nuova Manutenzione
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<Schedule />}
-                onClick={() => navigate('/manutenzioni?stato=Programmata')}
-              >
-                Manutenzioni Programmate
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<Build />}
-                onClick={() => navigate('/manutenzioni?stato=In corso')}
-              >
-                In Corso
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<CheckCircle />}
-                onClick={() => navigate('/manutenzioni?stato=Completata')}
-              >
-                Completate
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<Assessment />}
-                onClick={() => {
-                  const csvData = statistiche?.costiMensili?.map(item => ({
-                    Mese: item._id,
-                    Costo: item.costoTotale
-                  })) || [];
-                  
-                  const csvContent = "data:text/csv;charset=utf-8," + 
-                    "Mese,Costo\n" +
-                    csvData.map(row => `${row.Mese},${row.Costo}`).join("\n");
-                  
-                  const encodedUri = encodeURI(csvContent);
-                  const link = document.createElement("a");
-                  link.setAttribute("href", encodedUri);
-                  link.setAttribute("download", `manutenzioni_${selectedYear}.csv`);
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                }}
-              >
-                Esporta Dati
-              </Button>
-            </Box>
           </Paper>
         </Grid>
       </Grid>
