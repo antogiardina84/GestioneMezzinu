@@ -1,4 +1,4 @@
-// src/components/alboGestori/AlboGestoriList.tsx
+// src/components/alboGestori/AlboGestoriList.tsx - CON ACTION BUTTONS INLINE
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -21,11 +21,9 @@ import {
   Chip,
   Dialog,
   CircularProgress,
-  Menu,
-  ListItemIcon,
-  ListItemText,
   Fab,
-  Toolbar
+  Toolbar,
+  Tooltip
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -33,7 +31,6 @@ import {
   Visibility as VisibilityIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  MoreVert as MoreVertIcon,
   Receipt as ReceiptIcon,
   Warning as WarningIcon,
   FolderOpen as FolderIcon
@@ -53,8 +50,6 @@ const AlboGestoriList: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedAlbo, setSelectedAlbo] = useState<any | null>(null);
   const [showDetail, setShowDetail] = useState(false);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [menuAlbo, setMenuAlbo] = useState<any | null>(null);
 
   useEffect(() => {
     fetchAlboGestori();
@@ -77,30 +72,18 @@ const AlboGestoriList: React.FC = () => {
     setSearchTerm(event.target.value);
   };
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, albo: any) => {
-    setAnchorEl(event.currentTarget);
-    setMenuAlbo(albo);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setMenuAlbo(null);
-  };
-
   const handleView = (albo: any) => {
     setSelectedAlbo(albo);
     setShowDetail(true);
-    handleMenuClose();
   };
 
   const handleEdit = (albo: any) => {
     setSelectedAlbo(albo);
     setShowForm(true);
-    handleMenuClose();
   };
 
   const handleDelete = async (albo: any) => {
-    if (window.confirm('Sei sicuro di voler eliminare questa iscrizione?')) {
+    if (window.confirm(`Sei sicuro di voler eliminare l'iscrizione ${albo.numeroIscrizioneAlbo}?`)) {
       try {
         await alboGestoriService.delete(albo._id);
         await fetchAlboGestori();
@@ -108,7 +91,6 @@ const AlboGestoriList: React.FC = () => {
         console.error('Errore nella eliminazione:', error);
       }
     }
-    handleMenuClose();
   };
 
   const formatDate = (date: string | Date) => {
@@ -231,7 +213,7 @@ const AlboGestoriList: React.FC = () => {
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Data Scadenza</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Stato</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Allegati</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Azioni</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="center">Azioni</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -255,13 +237,36 @@ const AlboGestoriList: React.FC = () => {
                     </Typography>
                   </IconButton>
                 </TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    size="small"
-                    onClick={(e) => handleMenuOpen(e, albo)}
-                  >
-                    <MoreVertIcon />
-                  </IconButton>
+                <TableCell align="center">
+                  <Box display="flex" gap={0.5} justifyContent="center">
+                    <Tooltip title="Visualizza" arrow>
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => handleView(albo)}
+                      >
+                        <VisibilityIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Modifica" arrow>
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => handleEdit(albo)}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Elimina" arrow>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleDelete(albo)}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                 </TableCell>
               </TableRow>
             ))}
@@ -277,32 +282,6 @@ const AlboGestoriList: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
-
-      {/* Menu Contestuale */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-      >
-        <MenuItem onClick={() => handleView(menuAlbo!)}>
-          <ListItemIcon>
-            <VisibilityIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Visualizza Dettagli</ListItemText>
-        </MenuItem>
-        <MenuItem onClick={() => handleEdit(menuAlbo!)}>
-          <ListItemIcon>
-            <EditIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Modifica</ListItemText>
-        </MenuItem>
-        <MenuItem onClick={() => handleDelete(menuAlbo!)} sx={{ color: 'error.main' }}>
-          <ListItemIcon>
-            <DeleteIcon fontSize="small" color="error" />
-          </ListItemIcon>
-          <ListItemText>Elimina</ListItemText>
-        </MenuItem>
-      </Menu>
 
       {/* Dialogs */}
       <Dialog 

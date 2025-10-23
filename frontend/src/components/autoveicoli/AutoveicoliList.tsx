@@ -1,4 +1,4 @@
-// src/components/autoveicoli/AutoveicoliList.tsx - CON ACTION BUTTONS
+// src/components/autoveicoli/AutoveicoliList.tsx - CON ACTION BUTTONS INLINE
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -23,6 +23,7 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
+  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -56,7 +57,7 @@ const AutoveicoliList: React.FC = () => {
   const [selectedAuto, setSelectedAuto] = useState<Autoveicolo | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   
-  // STATI MENU
+  // STATI MENU (per azioni aggiuntive)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [menuAuto, setMenuAuto] = useState<Autoveicolo | null>(null);
 
@@ -139,7 +140,7 @@ const AutoveicoliList: React.FC = () => {
   }, []);
 
   const handleDelete = React.useCallback(async (auto: Autoveicolo) => {
-    if (window.confirm('Sei sicuro di voler eliminare questo autoveicolo?')) {
+    if (window.confirm(`Sei sicuro di voler eliminare l'autoveicolo ${auto.targa}?`)) {
       try {
         await autoveicoliService.delete(auto._id);
         // Ricarica dati
@@ -296,7 +297,7 @@ const AutoveicoliList: React.FC = () => {
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Modello</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Anno</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Stato</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Azioni</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="center">Azioni</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -320,14 +321,47 @@ const AutoveicoliList: React.FC = () => {
                       size="small" 
                     />
                   </TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={(e) => handleMenuOpen(e, auto)}
-                      color="primary"
-                    >
-                      <MoreVertIcon />
-                    </IconButton>
+                  <TableCell align="center">
+                    <Box display="flex" gap={0.5} justifyContent="center" alignItems="center">
+                      <Tooltip title="Visualizza" arrow>
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => handleView(auto)}
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Modifica" arrow>
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => handleEdit(auto)}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Elimina" arrow>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDelete(auto)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      {/* Menu aggiuntivo solo per veicoli Attivi */}
+                      {auto.stato === 'Attivo' && (
+                        <Tooltip title="Altre azioni" arrow>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => handleMenuOpen(e, auto)}
+                          >
+                            <MoreVertIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -358,56 +392,32 @@ const AutoveicoliList: React.FC = () => {
           />
         </TableContainer>
 
-        {/* Menu Azioni */}
+        {/* Menu Azioni Aggiuntive (Vendi, Demolisci, Chiudi Noleggio) */}
         <Menu
           anchorEl={anchorEl}
           open={Boolean(anchorEl)}
           onClose={handleMenuClose}
         >
-          <MenuItem onClick={() => menuAuto && handleView(menuAuto)}>
+          <MenuItem onClick={() => menuAuto && handleVendi(menuAuto)}>
             <ListItemIcon>
-              <VisibilityIcon fontSize="small" />
+              <SellOutlined fontSize="small" />
             </ListItemIcon>
-            <ListItemText>Visualizza Dettagli</ListItemText>
+            <ListItemText>Vendi</ListItemText>
           </MenuItem>
-          <MenuItem onClick={() => menuAuto && handleEdit(menuAuto)}>
+          <MenuItem onClick={() => menuAuto && handleDemolisci(menuAuto)}>
             <ListItemIcon>
-              <EditIcon fontSize="small" />
+              <DemolisciIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText>Modifica</ListItemText>
+            <ListItemText>Demolisci</ListItemText>
           </MenuItem>
-          {menuAuto?.stato === 'Attivo' && (
-            <>
-              <Divider />
-              <MenuItem onClick={() => menuAuto && handleVendi(menuAuto)}>
-                <ListItemIcon>
-                  <SellOutlined fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>Vendi</ListItemText>
-              </MenuItem>
-              <MenuItem onClick={() => menuAuto && handleDemolisci(menuAuto)}>
-                <ListItemIcon>
-                  <DemolisciIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>Demolisci</ListItemText>
-              </MenuItem>
-              {menuAuto?.tipologiaAcquisto === 'Noleggio' && (
-                <MenuItem onClick={() => menuAuto && handleChiudiNoleggio(menuAuto)}>
-                  <ListItemIcon>
-                    <ChiudiIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText>Chiudi Noleggio</ListItemText>
-                </MenuItem>
-              )}
-            </>
+          {menuAuto?.tipologiaAcquisto === 'Noleggio' && (
+            <MenuItem onClick={() => menuAuto && handleChiudiNoleggio(menuAuto)}>
+              <ListItemIcon>
+                <ChiudiIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Chiudi Noleggio</ListItemText>
+            </MenuItem>
           )}
-          <Divider />
-          <MenuItem onClick={() => menuAuto && handleDelete(menuAuto)} sx={{ color: 'error.main' }}>
-            <ListItemIcon>
-              <DeleteIcon fontSize="small" color="error" />
-            </ListItemIcon>
-            <ListItemText>Elimina</ListItemText>
-          </MenuItem>
         </Menu>
 
         {/* Dialog Form */}

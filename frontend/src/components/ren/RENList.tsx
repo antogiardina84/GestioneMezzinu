@@ -1,4 +1,4 @@
-// src/components/ren/RENList.tsx
+// src/components/ren/RENList.tsx - CON ACTION BUTTONS INLINE
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -21,11 +21,9 @@ import {
   Chip,
   Dialog,
   CircularProgress,
-  Menu,
-  ListItemIcon,
-  ListItemText,
   Fab,
-  Toolbar
+  Toolbar,
+  Tooltip
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -33,7 +31,6 @@ import {
   Visibility as VisibilityIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  MoreVert as MoreVertIcon,
   Assignment as AssignmentIcon,
   Warning as WarningIcon,
   FolderOpen as FolderIcon
@@ -53,8 +50,6 @@ const RENList: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedREN, setSelectedREN] = useState<any | null>(null);
   const [showDetail, setShowDetail] = useState(false);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [menuREN, setMenuREN] = useState<any | null>(null);
 
   const regioni = [
     'Abruzzo', 'Basilicata', 'Calabria', 'Campania', 'Emilia-Romagna',
@@ -84,30 +79,18 @@ const RENList: React.FC = () => {
     setSearchTerm(event.target.value);
   };
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, ren: any) => {
-    setAnchorEl(event.currentTarget);
-    setMenuREN(ren);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setMenuREN(null);
-  };
-
   const handleView = (ren: any) => {
     setSelectedREN(ren);
     setShowDetail(true);
-    handleMenuClose();
   };
 
   const handleEdit = (ren: any) => {
     setSelectedREN(ren);
     setShowForm(true);
-    handleMenuClose();
   };
 
   const handleDelete = async (ren: any) => {
-    if (window.confirm('Sei sicuro di voler eliminare questa iscrizione REN?')) {
+    if (window.confirm(`Sei sicuro di voler eliminare il REN ${ren.numeroIscrizioneREN}?`)) {
       try {
         await renService.delete(ren._id);
         await fetchRENs();
@@ -115,7 +98,6 @@ const RENList: React.FC = () => {
         console.error('Errore nella eliminazione:', error);
       }
     }
-    handleMenuClose();
   };
 
   const formatDate = (date: string | Date) => {
@@ -236,7 +218,7 @@ const RENList: React.FC = () => {
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Data Scadenza</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Stato</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Allegati</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Azioni</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="center">Azioni</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -267,13 +249,36 @@ const RENList: React.FC = () => {
                     </Typography>
                   </IconButton>
                 </TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    size="small"
-                    onClick={(e) => handleMenuOpen(e, ren)}
-                  >
-                    <MoreVertIcon />
-                  </IconButton>
+                <TableCell align="center">
+                  <Box display="flex" gap={0.5} justifyContent="center">
+                    <Tooltip title="Visualizza" arrow>
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => handleView(ren)}
+                      >
+                        <VisibilityIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Modifica" arrow>
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => handleEdit(ren)}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Elimina" arrow>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleDelete(ren)}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                 </TableCell>
               </TableRow>
             ))}
@@ -289,32 +294,6 @@ const RENList: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
-
-      {/* Menu Contestuale */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-      >
-        <MenuItem onClick={() => handleView(menuREN!)}>
-          <ListItemIcon>
-            <VisibilityIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Visualizza Dettagli</ListItemText>
-        </MenuItem>
-        <MenuItem onClick={() => handleEdit(menuREN!)}>
-          <ListItemIcon>
-            <EditIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Modifica</ListItemText>
-        </MenuItem>
-        <MenuItem onClick={() => handleDelete(menuREN!)} sx={{ color: 'error.main' }}>
-          <ListItemIcon>
-            <DeleteIcon fontSize="small" color="error" />
-          </ListItemIcon>
-          <ListItemText>Elimina</ListItemText>
-        </MenuItem>
-      </Menu>
 
       {/* Dialogs */}
       <Dialog 

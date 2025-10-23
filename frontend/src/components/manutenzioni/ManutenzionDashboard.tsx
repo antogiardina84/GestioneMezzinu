@@ -297,13 +297,6 @@ const DashboardManutenzioni: React.FC = () => {
               </Select>
             </FormControl>
 
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => navigate('/manutenzioni/new')}
-            >
-              Nuova
-            </Button>
           </Box>
         </Grid>
       </Grid>
