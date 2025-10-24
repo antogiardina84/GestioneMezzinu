@@ -35,6 +35,7 @@ import {
   AccountCircle as AccountCircleIcon,
   Settings as SettingsIcon,
   Home as HomeIcon,
+  MiscellaneousServices as ServicesIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 
@@ -99,6 +100,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       icon: <CarIcon />, 
       path: '/autoveicoli',
       description: 'Gestione veicoli aziendali'
+    },
+    { 
+      text: 'Servizi', 
+      icon: <ServicesIcon />, 
+      path: '/servizi',
+      description: 'Gestione servizi'
     },
     { 
       text: 'Albo Gestori', 
@@ -433,7 +440,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               textAlign: 'center'
             }}
           >
-            Versione 2.1.1
+            Versione 2.2.1
           </Typography>
         </Box>
       </Drawer>
