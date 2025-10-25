@@ -15,6 +15,7 @@ import ManutenzioniDashboard from './components/manutenzioni/ManutenzionDashboar
 import RENList from './components/ren/RENList';
 import UsersList from './components/users/UsersList';
 import UsersManagement from './components/users/UsersManagement';
+import ServiziList from './components/servizi/ServiziList';
 
 // Tema Odoo-style con ottimizzazioni responsive
 const odooTheme = createTheme({
@@ -600,6 +601,7 @@ function App() {
                       <Route path='/manutenzioni/dashboard' element={<ManutenzioniDashboard />} />
                       <Route path="/ren" element={<RENList />} />
                       <Route path="/users" element={<UsersManagement />} />
+                      <Route path='/servizi' element={<ServiziList />} />
                     </Routes>
                   </Layout>
                 </PrivateRoute>
