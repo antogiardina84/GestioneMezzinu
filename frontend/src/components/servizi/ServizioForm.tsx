@@ -20,22 +20,46 @@ import {
   Tabs,
   Tab,
   Paper,
-  Chip,
   FormControlLabel,
   Switch,
 } from '@mui/material';
 import {
   Close as CloseIcon,
   Save as SaveIcon,
-  Add as AddIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
-import dayjs, { Dayjs } from 'dayjs';
-import { Servizio, TipoServizio, StatoServizio, PrioritaServizio, Materiale } from '../../types/Servizio';
+import dayjs from 'dayjs';
+import { Servizio, TipoServizio, StatoServizio, PrioritaServizio, Materiale, Chilometraggio, Carburante, Ricorrenza, Luogo, Cliente, Costi } from '../../types/Servizio';
 import { serviziService } from '../../services/serviziService';
 import { autoveicoliService } from '../../services/autoveicoliService';
+import { autistiService } from '../../services/autistiService';
 import { Autoveicolo } from '../../types/Autoveicolo';
+import { AutistaListItem } from '../../types/Autista';
+
+// Tipo per i dati del form - usa stringhe per autoveicolo e autista (IDs)
+interface ServizioFormData {
+  titolo: string;
+  descrizione?: string;
+  autoveicolo: string;
+  autista: string;
+  tipoServizio: TipoServizio;
+  stato: StatoServizio;
+  priorita: PrioritaServizio;
+  dataInizio: Date;
+  dataFine: Date;
+  oraInizio: string;
+  oraFine: string;
+  luogoPartenza?: Luogo;
+  luogoArrivo?: Luogo;
+  cliente?: Cliente;
+  materiali?: Materiale[];
+  costi?: Costi;
+  chilometraggio?: Chilometraggio;
+  carburante?: Carburante;
+  ricorrenza?: Ricorrenza;
+  note?: string;
+}
 
 interface ServizioFormProps {
   servizio: Servizio | null;
@@ -60,21 +84,22 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [autoveicoli, setAutoveicoli] = useState<Autoveicolo[]>([]);
+  const [autisti, setAutisti] = useState<AutistaListItem[]>([]);
   
   // Dati principali
   const [titolo, setTitolo] = useState('');
   const [descrizione, setDescrizione] = useState('');
-  const [autoveicoloId, setAutoveicoloId] = useState('');
-  const [autista, setAutista] = useState('');
+  const [autoveicoloId, setAutoveicoloId] = useState<string>('');
+  const [autistaId, setAutistaId] = useState<string>('');
   const [tipoServizio, setTipoServizio] = useState<TipoServizio>('Trasporto');
   const [stato, setStato] = useState<StatoServizio>('Programmato');
   const [priorita, setPriorita] = useState<PrioritaServizio>('Media');
   
   // Date e orari
-  const [dataInizio, setDataInizio] = useState<Dayjs | null>(dayjs());
-  const [dataFine, setDataFine] = useState<Dayjs | null>(dayjs());
-  const [oraInizio, setOraInizio] = useState<Dayjs | null>(dayjs().hour(8).minute(0));
-  const [oraFine, setOraFine] = useState<Dayjs | null>(dayjs().hour(17).minute(0));
+  const [dataInizio, setDataInizio] = useState<any>(dayjs());
+  const [dataFine, setDataFine] = useState<any>(dayjs());
+  const [oraInizio, setOraInizio] = useState<any>(dayjs().hour(8).minute(0));
+  const [oraFine, setOraFine] = useState<any>(dayjs().hour(17).minute(0));
   
   // Luoghi
   const [luogoPartenza, setLuogoPartenza] = useState({
@@ -107,21 +132,53 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
     parcheggi: 0,
     altri: 0,
   });
+
+  // Chilometraggio
+  const [chilometraggio, setChilometraggio] = useState<Chilometraggio>({
+    iniziale: 0,
+    finale: 0,
+    totale: 0,
+  });
+
+  // Carburante
+  const [carburante, setCarburante] = useState<Carburante>({
+    iniziale: 0,
+    finale: 0,
+    rifornimento: {
+      effettuato: false,
+      quantita: 0,
+      costo: 0,
+      stazione: '',
+    },
+  });
+
+  // Ricorrenza
+  const [ricorrenza, setRicorrenza] = useState<Ricorrenza>({
+    attiva: false,
+    frequenza: 'Giornaliera',
+    giornoSettimana: [],
+    giornoMese: 1,
+    dataFineRicorrenza: undefined,
+  });
   
   // Note
   const [note, setNote] = useState('');
 
-  // Carica autoveicoli
+  // Carica autoveicoli e autisti
   useEffect(() => {
-    const loadAutoveicoli = async () => {
+    const loadData = async () => {
       try {
-        const response = await autoveicoliService.getAll({ limit: 1000 });
-        setAutoveicoli(response.data || []);
+        const [autoveicoliResponse, autistiResponse] = await Promise.all([
+          autoveicoliService.getAll({ limit: 1000 }),
+          autistiService.getListaSemplice()
+        ]);
+        setAutoveicoli(autoveicoliResponse.data || []);
+        setAutisti(autistiResponse || []);
       } catch (error) {
-        console.error('Errore caricamento autoveicoli:', error);
+        console.error('Errore caricamento dati:', error);
       }
     };
-    loadAutoveicoli();
+    loadData();
   }, []);
 
   // Popola form se in modifica
@@ -130,7 +187,8 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
       setTitolo(servizio.titolo || '');
       setDescrizione(servizio.descrizione || '');
       setAutoveicoloId(servizio.autoveicolo?._id || '');
-      setAutista(servizio.autista || '');
+      // autista è sempre una stringa nel backend
+      setAutistaId(typeof servizio.autista === 'string' ? servizio.autista : '');
       setTipoServizio(servizio.tipoServizio);
       setStato(servizio.stato);
       setPriorita(servizio.priorita);
@@ -178,83 +236,47 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
           altri: servizio.costi.altri || 0,
         });
       }
+
+      if (servizio.chilometraggio) {
+        setChilometraggio({
+          iniziale: servizio.chilometraggio.iniziale || 0,
+          finale: servizio.chilometraggio.finale || 0,
+          totale: servizio.chilometraggio.totale || 0,
+        });
+      }
+
+      if (servizio.carburante) {
+        setCarburante({
+          iniziale: servizio.carburante.iniziale || 0,
+          finale: servizio.carburante.finale || 0,
+          rifornimento: servizio.carburante.rifornimento || {
+            effettuato: false,
+            quantita: 0,
+            costo: 0,
+            stazione: '',
+          },
+        });
+      }
+
+      if (servizio.ricorrenza) {
+        setRicorrenza({
+          attiva: servizio.ricorrenza.attiva || false,
+          frequenza: servizio.ricorrenza.frequenza || 'Giornaliera',
+          giornoSettimana: servizio.ricorrenza.giornoSettimana || [],
+          giornoMese: servizio.ricorrenza.giornoMese || 1,
+          dataFineRicorrenza: servizio.ricorrenza.dataFineRicorrenza || undefined,
+        });
+      }
       
       setNote(servizio.note || '');
     }
   }, [servizio]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    
-    // Validazione
-    if (!titolo.trim()) {
-      setError('Il titolo è obbligatorio');
-      return;
-    }
-    if (!autoveicoloId) {
-      setError('Seleziona un autoveicolo');
-      return;
-    }
-    if (!autista.trim()) {
-      setError('L\'autista è obbligatorio');
-      return;
-    }
-    if (!dataInizio || !dataFine) {
-      setError('Le date sono obbligatorie');
-      return;
-    }
-    if (!oraInizio || !oraFine) {
-      setError('Gli orari sono obbligatori');
-      return;
-    }
-
-    const dati: Partial<Servizio> = {
-      titolo: titolo.trim(),
-      descrizione: descrizione.trim(),
-      autoveicolo: autoveicoloId as any,
-      autista: autista.trim(),
-      tipoServizio,
-      stato,
-      priorita,
-      dataInizio: dataInizio.toDate(),
-      dataFine: dataFine.toDate(),
-      oraInizio: oraInizio.format('HH:mm'),
-      oraFine: oraFine.format('HH:mm'),
-      luogoPartenza,
-      luogoArrivo,
-      cliente,
-      materiali,
-      costi,
-      note: note.trim(),
-    };
-
-    try {
-      setLoading(true);
-      
-      if (servizio?._id) {
-        await serviziService.update(servizio._id, dati);
-      } else {
-        await serviziService.create(dati);
-      }
-      
-      onSuccess();
-    } catch (error: any) {
-      console.error('Errore salvataggio servizio:', error);
-      setError(error.response?.data?.error || 'Errore durante il salvataggio');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const addMateriale = () => {
-    setMateriali([...materiali, {
-      descrizione: '',
-      quantita: 0,
-      unitaMisura: 'kg',
-      peso: 0,
-      note: '',
-    }]);
+    setMateriali([
+      ...materiali,
+      { descrizione: '', quantita: 0, unitaMisura: 'kg', peso: 0, note: '' },
+    ]);
   };
 
   const removeMateriale = (index: number) => {
@@ -262,9 +284,53 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
   };
 
   const updateMateriale = (index: number, field: keyof Materiale, value: any) => {
-    const newMateriali = [...materiali];
-    newMateriali[index] = { ...newMateriali[index], [field]: value };
-    setMateriali(newMateriali);
+    const updated = materiali.map((m, i) =>
+      i === index ? { ...m, [field]: value } : m
+    );
+    setMateriali(updated);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const data: ServizioFormData = {
+        titolo,
+        descrizione,
+        autoveicolo: autoveicoloId,
+        autista: autistaId,
+        tipoServizio,
+        stato,
+        priorita,
+        dataInizio: dataInizio.toDate(),
+        dataFine: dataFine.toDate(),
+        oraInizio: oraInizio.format('HH:mm'),
+        oraFine: oraFine.format('HH:mm'),
+        luogoPartenza,
+        luogoArrivo,
+        cliente,
+        materiali,
+        costi,
+        chilometraggio,
+        carburante,
+        ricorrenza,
+        note,
+      };
+
+      if (servizio) {
+        await serviziService.update(servizio._id, data as any);
+      } else {
+        await serviziService.create(data as any);
+      }
+
+      onSuccess();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Errore durante il salvataggio');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -274,7 +340,7 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
           <Typography variant="h6">
             {servizio ? 'Modifica Servizio' : 'Nuovo Servizio'}
           </Typography>
-          <IconButton onClick={onCancel} size="small">
+          <IconButton onClick={onCancel} disabled={loading}>
             <CloseIcon />
           </IconButton>
         </Box>
@@ -282,18 +348,21 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
 
       <Divider />
 
-      <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-            {error}
-          </Alert>
-        )}
-
-        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
           <Tab label="Dati Principali" />
           <Tab label="Luoghi e Cliente" />
           <Tab label="Materiali e Costi" />
+          <Tab label="Chilometraggio" />
         </Tabs>
+      </Box>
+
+      <DialogContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
         {/* TAB 1: DATI PRINCIPALI */}
         <TabPanel value={activeTab} index={0}>
@@ -305,6 +374,7 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
                 label="Titolo Servizio"
                 value={titolo}
                 onChange={(e) => setTitolo(e.target.value)}
+                autoFocus
               />
             </Grid>
 
@@ -312,7 +382,7 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
               <TextField
                 fullWidth
                 multiline
-                rows={2}
+                rows={3}
                 label="Descrizione"
                 value={descrizione}
                 onChange={(e) => setDescrizione(e.target.value)}
@@ -320,29 +390,32 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <Autocomplete
-                options={autoveicoli}
-                getOptionLabel={(option) => `${option.targa} - ${option.marca} ${option.modello}`}
-                value={autoveicoli.find(a => a._id === autoveicoloId) || null}
-                onChange={(_, newValue) => {
-                  setAutoveicoloId(newValue?._id || '');
-                  if (newValue?.autista) {
-                    setAutista(newValue.autista);
-                  }
-                }}
-                renderInput={(params) => (
-                  <TextField {...params} label="Autoveicolo *" required />
-                )}
-              />
+              <FormControl fullWidth required>
+                <InputLabel>Autoveicolo</InputLabel>
+                <Select
+                  value={autoveicoloId}
+                  onChange={(e) => setAutoveicoloId(e.target.value)}
+                  label="Autoveicolo"
+                >
+                  {autoveicoli.map((auto) => (
+                    <MenuItem key={auto._id} value={auto._id}>
+                      {auto.targa} - {auto.marca} {auto.modello}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                required
-                label="Autista"
-                value={autista}
-                onChange={(e) => setAutista(e.target.value)}
+              <Autocomplete
+                value={autisti.find(a => a.id === autistaId) || null}
+                onChange={(_, newValue) => setAutistaId(newValue?.id || '')}
+                options={autisti}
+                getOptionLabel={(option) => option.label}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                renderInput={(params) => (
+                  <TextField {...params} label="Autista" required />
+                )}
               />
             </Grid>
 
@@ -351,8 +424,8 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
                 <InputLabel>Tipo Servizio</InputLabel>
                 <Select
                   value={tipoServizio}
-                  label="Tipo Servizio"
                   onChange={(e) => setTipoServizio(e.target.value as TipoServizio)}
+                  label="Tipo Servizio"
                 >
                   <MenuItem value="Trasporto">Trasporto</MenuItem>
                   <MenuItem value="Raccolta">Raccolta</MenuItem>
@@ -365,28 +438,12 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
             </Grid>
 
             <Grid item xs={12} md={4}>
-              <FormControl fullWidth required>
-                <InputLabel>Priorità</InputLabel>
-                <Select
-                  value={priorita}
-                  label="Priorità"
-                  onChange={(e) => setPriorita(e.target.value as PrioritaServizio)}
-                >
-                  <MenuItem value="Bassa">Bassa</MenuItem>
-                  <MenuItem value="Media">Media</MenuItem>
-                  <MenuItem value="Alta">Alta</MenuItem>
-                  <MenuItem value="Urgente">Urgente</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth required>
+              <FormControl fullWidth>
                 <InputLabel>Stato</InputLabel>
                 <Select
                   value={stato}
-                  label="Stato"
                   onChange={(e) => setStato(e.target.value as StatoServizio)}
+                  label="Stato"
                 >
                   <MenuItem value="Programmato">Programmato</MenuItem>
                   <MenuItem value="In corso">In corso</MenuItem>
@@ -397,9 +454,25 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
               </FormControl>
             </Grid>
 
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Priorità</InputLabel>
+                <Select
+                  value={priorita}
+                  onChange={(e) => setPriorita(e.target.value as PrioritaServizio)}
+                  label="Priorità"
+                >
+                  <MenuItem value="Bassa">Bassa</MenuItem>
+                  <MenuItem value="Media">Media</MenuItem>
+                  <MenuItem value="Alta">Alta</MenuItem>
+                  <MenuItem value="Urgente">Urgente</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
             <Grid item xs={12} md={6}>
               <DatePicker
-                label="Data Inizio *"
+                label="Data Inizio"
                 value={dataInizio}
                 onChange={(newValue) => setDataInizio(newValue)}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
@@ -408,7 +481,7 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
 
             <Grid item xs={12} md={6}>
               <DatePicker
-                label="Data Fine *"
+                label="Data Fine"
                 value={dataFine}
                 onChange={(newValue) => setDataFine(newValue)}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
@@ -417,32 +490,21 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
 
             <Grid item xs={12} md={6}>
               <TimePicker
-                label="Ora Inizio *"
+                label="Ora Inizio"
                 value={oraInizio}
                 onChange={(newValue) => setOraInizio(newValue)}
-                ampm={false}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
+                ampm={false}
               />
             </Grid>
 
             <Grid item xs={12} md={6}>
               <TimePicker
-                label="Ora Fine *"
+                label="Ora Fine"
                 value={oraFine}
                 onChange={(newValue) => setOraFine(newValue)}
-                ampm={false}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                label="Note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
+                ampm={false}
               />
             </Grid>
           </Grid>
@@ -464,7 +526,7 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
                 onChange={(e) => setLuogoPartenza({ ...luogoPartenza, indirizzo: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 label="Città"
@@ -472,15 +534,15 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
                 onChange={(e) => setLuogoPartenza({ ...luogoPartenza, citta: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={6} md={1}>
               <TextField
                 fullWidth
-                label="Provincia"
+                label="Prov."
                 value={luogoPartenza.provincia}
                 onChange={(e) => setLuogoPartenza({ ...luogoPartenza, provincia: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={6} md={1}>
               <TextField
                 fullWidth
                 label="CAP"
@@ -502,7 +564,7 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
                 onChange={(e) => setLuogoArrivo({ ...luogoArrivo, indirizzo: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 label="Città"
@@ -510,15 +572,15 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
                 onChange={(e) => setLuogoArrivo({ ...luogoArrivo, citta: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={6} md={1}>
               <TextField
                 fullWidth
-                label="Provincia"
+                label="Prov."
                 value={luogoArrivo.provincia}
                 onChange={(e) => setLuogoArrivo({ ...luogoArrivo, provincia: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={6} md={1}>
               <TextField
                 fullWidth
                 label="CAP"
@@ -529,7 +591,7 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
 
             <Grid item xs={12} mt={2}>
               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                Dati Cliente
+                Informazioni Cliente
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
@@ -572,25 +634,16 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
         <TabPanel value={activeTab} index={2}>
           <Grid container spacing={2}>
             <Grid item xs={12}>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  Materiali Trasportati
-                </Typography>
-                <Button
-                  size="small"
-                  startIcon={<AddIcon />}
-                  onClick={addMateriale}
-                >
-                  Aggiungi Materiale
-                </Button>
-              </Box>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                Materiali Trasportati
+              </Typography>
             </Grid>
 
             {materiali.map((materiale, index) => (
               <Grid item xs={12} key={index}>
                 <Paper variant="outlined" sx={{ p: 2 }}>
                   <Grid container spacing={2}>
-                    <Grid item xs={12} md={4}>
+                    <Grid item xs={12} md={5}>
                       <TextField
                         fullWidth
                         label="Descrizione"
@@ -603,7 +656,7 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
                         fullWidth
                         type="number"
                         label="Quantità"
-                        value={materiale.quantita}
+                        value={materiale.quantita || 0}
                         onChange={(e) => updateMateriale(index, 'quantita', parseFloat(e.target.value) || 0)}
                       />
                     </Grid>
@@ -611,7 +664,7 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
                       <TextField
                         fullWidth
                         label="Unità"
-                        value={materiale.unitaMisura}
+                        value={materiale.unitaMisura || 'kg'}
                         onChange={(e) => updateMateriale(index, 'unitaMisura', e.target.value)}
                       />
                     </Grid>
@@ -620,7 +673,7 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
                         fullWidth
                         type="number"
                         label="Peso (kg)"
-                        value={materiale.peso}
+                        value={materiale.peso || 0}
                         onChange={(e) => updateMateriale(index, 'peso', parseFloat(e.target.value) || 0)}
                       />
                     </Grid>
@@ -636,6 +689,16 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
                 </Paper>
               </Grid>
             ))}
+
+            <Grid item xs={12}>
+              <Button
+                variant="outlined"
+                onClick={addMateriale}
+                sx={{ mt: 1 }}
+              >
+                + Aggiungi Materiale
+              </Button>
+            </Grid>
 
             <Grid item xs={12} mt={2}>
               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
@@ -678,6 +741,157 @@ const ServizioForm: React.FC<ServizioFormProps> = ({ servizio, onSuccess, onCanc
                   Totale Costi: € {(costi.pedaggi + costi.parcheggi + costi.altri).toFixed(2)}
                 </Typography>
               </Paper>
+            </Grid>
+          </Grid>
+        </TabPanel>
+
+        {/* TAB 4: CHILOMETRAGGIO E CARBURANTE */}
+        <TabPanel value={activeTab} index={3}>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                Chilometraggio
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Chilometraggio Iniziale (km)"
+                value={chilometraggio?.iniziale || 0}
+                onChange={(e) => setChilometraggio({ ...chilometraggio, iniziale: parseFloat(e.target.value) || 0 })}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Chilometraggio Finale (km)"
+                value={chilometraggio?.finale || 0}
+                onChange={(e) => setChilometraggio({ ...chilometraggio, finale: parseFloat(e.target.value) || 0 })}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Totale (km)"
+                value={(chilometraggio?.finale || 0) - (chilometraggio?.iniziale || 0)}
+                disabled
+              />
+            </Grid>
+
+            <Grid item xs={12} mt={2}>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                Carburante
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Livello Iniziale (%)"
+                value={carburante?.iniziale || 0}
+                onChange={(e) => setCarburante({ ...carburante, iniziale: parseFloat(e.target.value) || 0 })}
+                inputProps={{ min: 0, max: 100 }}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Livello Finale (%)"
+                value={carburante?.finale || 0}
+                onChange={(e) => setCarburante({ ...carburante, finale: parseFloat(e.target.value) || 0 })}
+                inputProps={{ min: 0, max: 100 }}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch 
+                    checked={carburante?.rifornimento?.effettuato || false} 
+                    onChange={(e) => setCarburante({
+                      ...carburante,
+                      rifornimento: {
+                        effettuato: e.target.checked,
+                        quantita: carburante.rifornimento?.quantita,
+                        costo: carburante.rifornimento?.costo,
+                        stazione: carburante.rifornimento?.stazione,
+                      }
+                    })}
+                  />
+                }
+                label="Rifornimento Effettuato"
+              />
+            </Grid>
+
+            {carburante?.rifornimento?.effettuato && (
+              <>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Quantità (L)"
+                    value={carburante?.rifornimento?.quantita || 0}
+                    onChange={(e) => setCarburante({
+                      ...carburante,
+                      rifornimento: {
+                        effettuato: true,
+                        quantita: parseFloat(e.target.value) || 0,
+                        costo: carburante.rifornimento?.costo,
+                        stazione: carburante.rifornimento?.stazione,
+                      }
+                    })}
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Costo (€)"
+                    value={carburante?.rifornimento?.costo || 0}
+                    onChange={(e) => setCarburante({
+                      ...carburante,
+                      rifornimento: {
+                        effettuato: true,
+                        quantita: carburante.rifornimento?.quantita,
+                        costo: parseFloat(e.target.value) || 0,
+                        stazione: carburante.rifornimento?.stazione,
+                      }
+                    })}
+                    inputProps={{ step: 0.01, min: 0 }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    label="Stazione"
+                    value={carburante?.rifornimento?.stazione || ''}
+                    onChange={(e) => setCarburante({
+                      ...carburante,
+                      rifornimento: {
+                        effettuato: true,
+                        quantita: carburante.rifornimento?.quantita,
+                        costo: carburante.rifornimento?.costo,
+                        stazione: e.target.value,
+                      }
+                    })}
+                  />
+                </Grid>
+              </>
+            )}
+
+            <Grid item xs={12} mt={2}>
+              <TextField
+                fullWidth
+                multiline
+                rows={4}
+                label="Note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
             </Grid>
           </Grid>
         </TabPanel>

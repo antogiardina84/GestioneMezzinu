@@ -1,4 +1,4 @@
-// src/components/autoveicoli/AutoveicoliList.tsx - CON ACTION BUTTONS INLINE
+// src/components/autoveicoli/AutoveicoliList.tsx - CON COLONNA AUTISTA
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -22,7 +22,6 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
-  Divider,
   Tooltip,
 } from '@mui/material';
 import {
@@ -47,7 +46,6 @@ import AutoveicoloForm from './AutoveicoloForm';
 import AutoveicoloDetailModal from './AutoveicoloDetailModal';
 
 const AutoveicoliList: React.FC = () => {
-  // STATI MINIMI + MENU ACTIONS
   const [allData, setAllData] = useState<Autoveicolo[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,8 +54,6 @@ const AutoveicoliList: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedAuto, setSelectedAuto] = useState<Autoveicolo | null>(null);
   const [showDetail, setShowDetail] = useState(false);
-  
-  // STATI MENU (per azioni aggiuntive)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [menuAuto, setMenuAuto] = useState<Autoveicolo | null>(null);
 
@@ -68,7 +64,6 @@ const AutoveicoliList: React.FC = () => {
     const loadData = async () => {
       try {
         setLoading(true);
-        // Usa getAll con limite molto alto per ottenere tutti i dati
         const response = await autoveicoliService.getAll({ limit: 10000 });
         
         if (!isCancelled) {
@@ -93,7 +88,7 @@ const AutoveicoliList: React.FC = () => {
     };
   }, []);
 
-  // FILTRAGGIO SEMPLICE
+  // FILTRAGGIO
   const filteredData = React.useMemo(() => {
     if (!searchTerm.trim()) return allData;
     
@@ -105,16 +100,15 @@ const AutoveicoliList: React.FC = () => {
     );
   }, [allData, searchTerm]);
 
-  // PAGINAZIONE SEMPLICE
+  // PAGINAZIONE
   const paginatedData = React.useMemo(() => {
     const startIndex = page * rowsPerPage;
     return filteredData.slice(startIndex, startIndex + rowsPerPage);
   }, [filteredData, page, rowsPerPage]);
 
-  // HANDLERS SEMPLICI
+  // HANDLERS
   const handleSearchChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setSearchTerm(value);
+    setSearchTerm(event.target.value);
     setPage(0);
   }, []);
 
@@ -143,7 +137,6 @@ const AutoveicoliList: React.FC = () => {
     if (window.confirm(`Sei sicuro di voler eliminare l'autoveicolo ${auto.targa}?`)) {
       try {
         await autoveicoliService.delete(auto._id);
-        // Ricarica dati
         const response = await autoveicoliService.getAll({ limit: 10000 });
         setAllData(response.data || []);
       } catch (error) {
@@ -157,7 +150,6 @@ const AutoveicoliList: React.FC = () => {
     if (window.confirm('Sei sicuro di voler vendere questo autoveicolo?')) {
       try {
         await autoveicoliService.vendi(auto._id);
-        // Ricarica dati
         const response = await autoveicoliService.getAll({ limit: 10000 });
         setAllData(response.data || []);
       } catch (error) {
@@ -175,7 +167,6 @@ const AutoveicoliList: React.FC = () => {
           datiDemolitore,
           dataDemolizione: new Date().toISOString()
         });
-        // Ricarica dati
         const response = await autoveicoliService.getAll({ limit: 10000 });
         setAllData(response.data || []);
       } catch (error) {
@@ -189,7 +180,6 @@ const AutoveicoliList: React.FC = () => {
     if (window.confirm('Sei sicuro di voler chiudere il noleggio?')) {
       try {
         await autoveicoliService.update(auto._id, { stato: 'Chiuso' });
-        // Ricarica dati
         const response = await autoveicoliService.getAll({ limit: 10000 });
         setAllData(response.data || []);
       } catch (error) {
@@ -218,7 +208,6 @@ const AutoveicoliList: React.FC = () => {
     setShowForm(false);
     setSelectedAuto(null);
     
-    // Ricarica dati
     try {
       const response = await autoveicoliService.getAll({ limit: 10000 });
       setAllData(response.data || []);
@@ -295,6 +284,7 @@ const AutoveicoliList: React.FC = () => {
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Targa</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Marca</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Modello</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Autista</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Anno</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Stato</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="center">Azioni</TableCell>
@@ -308,6 +298,24 @@ const AutoveicoliList: React.FC = () => {
                   </TableCell>
                   <TableCell>{auto.marca}</TableCell>
                   <TableCell>{auto.modello}</TableCell>
+                  <TableCell>
+                    {typeof auto.autistaAssegnato === 'object' && auto.autistaAssegnato ? (
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>
+                          {auto.autistaAssegnato.nome} {auto.autistaAssegnato.cognome}
+                        </Typography>
+                        {auto.autistaAssegnato.contatti?.telefono && (
+                          <Typography variant="caption" color="text.secondary">
+                            📱 {auto.autistaAssegnato.contatti.telefono}
+                          </Typography>
+                        )}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        Non assegnato
+                      </Typography>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {auto.dataImmatricolazione 
                       ? dayjs(auto.dataImmatricolazione).format('YYYY')
@@ -350,7 +358,6 @@ const AutoveicoliList: React.FC = () => {
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      {/* Menu aggiuntivo solo per veicoli Attivi */}
                       {auto.stato === 'Attivo' && (
                         <Tooltip title="Altre azioni" arrow>
                           <IconButton
@@ -367,7 +374,7 @@ const AutoveicoliList: React.FC = () => {
               ))}
               {paginatedData.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                     <Typography color="textSecondary">
                       Nessun autoveicolo trovato
                     </Typography>
@@ -392,7 +399,7 @@ const AutoveicoliList: React.FC = () => {
           />
         </TableContainer>
 
-        {/* Menu Azioni Aggiuntive (Vendi, Demolisci, Chiudi Noleggio) */}
+        {/* Menu Azioni */}
         <Menu
           anchorEl={anchorEl}
           open={Boolean(anchorEl)}

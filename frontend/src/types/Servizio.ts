@@ -1,18 +1,15 @@
 // frontend/src/types/Servizio.ts
+import { AutistaListItem } from './Autista'; 
+import { Autoveicolo } from './Autoveicolo'; // AGGIUNTO
+
 export interface Servizio {
   _id: string;
   titolo: string;
   descrizione?: string;
-  autoveicolo: {
-    _id: string;
-    targa: string;
-    marca: string;
-    modello: string;
-    tipoCarrozzeria: string;
-    autista?: string;
-    portataMax?: number;
-  };
-  autista: string;
+  // CORREZIONE: Uso l'interfaccia Autoveicolo importata
+  autoveicolo: Autoveicolo; 
+  // La proprietà 'autista' a livello di Servizio è corretta (assegnazione per il servizio)
+  autista: string | AutistaListItem; 
   tipoServizio: TipoServizio;
   dataInizio: Date;
   dataFine: Date;

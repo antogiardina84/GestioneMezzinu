@@ -153,9 +153,9 @@ const AutoveicoloSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  autista: {
-    type: String,
-    trim: true
+  autistaAssegnato: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Autista'
   },
   portataMax: {
     type: Number,

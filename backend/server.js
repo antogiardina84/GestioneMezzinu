@@ -18,6 +18,8 @@ const renRoutes = require('./routes/ren');
 const manutenzioniRoutes = require('./routes/manutenzioni');
 const dashboardRoutes = require('./routes/dashboard');
 const usersRoutes = require('./routes/users');
+const serviziRoutes = require('./routes/servizi');
+const autistiRoutes = require('./routes/autisti');
 
 // Importazione middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -218,6 +220,8 @@ app.use('/api/albo-gestori', alboGestoriRoutes);
 app.use('/api/ren', renRoutes);
 app.use('/api/manutenzioni', manutenzioniRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/servizi', serviziRoutes);
+app.use('/api/autisti', autistiRoutes);
 
 // ===================================================
 // SERVIRE IL FRONTEND BUILDATO - Aggiunta per Render

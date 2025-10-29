@@ -127,16 +127,15 @@ const ServizioDetailModal: React.FC<ServizioDetailModalProps> = ({ servizio, onC
                     </Typography>
                   </Box>
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Autista
-                    </Typography>
-                    <Typography variant="body1" fontWeight={600} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Person fontSize="small" /> {servizio.autista}
-                    </Typography>
-                  </Box>
-                </Grid>
+                <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">Autista</Typography>
+                <Typography variant="body1" fontWeight={500}>
+                  {/* FIX: Aggiungi un type guard per visualizzare il nome completo */}
+                  {typeof servizio.autista === 'object'
+                    ? servizio.autista.nomeCompleto
+                    : servizio.autista}
+                </Typography>
+              </Grid>
               </Grid>
             </Paper>
           </Grid>

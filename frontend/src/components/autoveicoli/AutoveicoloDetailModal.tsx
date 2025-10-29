@@ -132,10 +132,15 @@ const AutoveicoloDetailModal: React.FC<AutoveicoloDetailModalProps> = ({ autovei
                 )}
                 {autoveicolo.autista && (
                   <TableRow>
-                    <TableCell component="th" scope="row">Autista:</TableCell>
-                    <TableCell>{autoveicolo.autista}</TableCell>
-                  </TableRow>
-                )}
+                    <TableCell component="th" scope="row">Autista:</TableCell>
+                    <TableCell>
+                      {typeof autoveicolo.autista === 'object' && autoveicolo.autista !== null
+                        ? `${(autoveicolo.autista as any).nome} ${(autoveicolo.autista as any).cognome}`
+                        : autoveicolo.autista
+                      }
+                    </TableCell>
+                  </TableRow>
+                )}
                 {autoveicolo.portataMax && (
                   <TableRow>
                     <TableCell component="th" scope="row">Portata Max:</TableCell>

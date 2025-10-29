@@ -85,6 +85,10 @@ exports.getServizi = asyncHandler(async (req, res) => {
       path: 'autoveicolo',
       select: 'targa marca modello tipoCarrozzeria autista portataMax'
     })
+    .populate({
+      path: 'autista',
+      select: 'nome cognome contatti.telefono contatti.email'
+    })
     .populate('createdBy', 'nome email')
     .populate('updatedBy', 'nome email')
     .sort({ dataInizio: 1, oraInizio: 1 })
@@ -119,6 +123,10 @@ exports.getServizio = asyncHandler(async (req, res, next) => {
     .populate({
       path: 'autoveicolo',
       select: 'targa marca modello tipoCarrozzeria autista portataMax dataImmatricolazione'
+    })
+    .populate({
+      path: 'autista',
+      select: 'nome cognome contatti.telefono contatti.email patenti qualifiche'
     })
     .populate('createdBy', 'nome email')
     .populate('updatedBy', 'nome email');
@@ -158,10 +166,16 @@ exports.createServizio = asyncHandler(async (req, res, next) => {
   // Verifica conflitti
   const conflitti = await servizio.verificaConflitti();
   
-  await servizio.populate({
-    path: 'autoveicolo',
-    select: 'targa marca modello tipoCarrozzeria'
-  });
+  await servizio.populate([
+    {
+      path: 'autoveicolo',
+      select: 'targa marca modello tipoCarrozzeria'
+    },
+    {
+      path: 'autista',
+      select: 'nome cognome contatti.telefono'
+    }
+  ]);
 
   res.status(201).json({
     success: true,
@@ -192,6 +206,9 @@ exports.updateServizio = asyncHandler(async (req, res, next) => {
   ).populate({
     path: 'autoveicolo',
     select: 'targa marca modello tipoCarrozzeria'
+  }).populate({
+    path: 'autista',
+    select: 'nome cognome contatti.telefono'
   });
 
   res.status(200).json({
@@ -367,6 +384,10 @@ exports.getServiziCalendario = asyncHandler(async (req, res, next) => {
     .populate({
       path: 'autoveicolo',
       select: 'targa marca modello tipoCarrozzeria autista'
+    })
+    .populate({
+      path: 'autista',
+      select: 'nome cognome contatti.telefono'
     })
     .sort({ dataInizio: 1, oraInizio: 1 });
 
@@ -590,6 +611,7 @@ exports.verificaConflitti = asyncHandler(async (req, res, next) => {
 
   const conflitti = await Servizio.find(filter)
     .populate('autoveicolo', 'targa marca modello')
+    .populate('autista', 'nome cognome')
     .sort({ dataInizio: 1 });
 
   res.status(200).json({

@@ -101,6 +101,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       path: '/autoveicoli',
       description: 'Gestione veicoli aziendali'
     },
+    {
+      text: 'Autisti',
+      icon: <CarIcon />,
+      path: '/autisti',
+      description: 'Gestione Autisti'
+    },
     { 
       text: 'Servizi', 
       icon: <ServicesIcon />, 

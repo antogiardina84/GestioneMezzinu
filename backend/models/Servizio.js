@@ -19,7 +19,8 @@ const servizioSchema = new mongoose.Schema({
     required: [true, 'L\'autoveicolo è obbligatorio']
   },
   autista: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Autista',
     trim: true,
     required: [true, 'L\'autista è obbligatorio']
   },

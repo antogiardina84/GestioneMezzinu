@@ -16,6 +16,7 @@ import RENList from './components/ren/RENList';
 import UsersList from './components/users/UsersList';
 import UsersManagement from './components/users/UsersManagement';
 import ServiziList from './components/servizi/ServiziList';
+import AutistiList  from './components/autisti/AutistiList';
 
 // Tema Odoo-style con ottimizzazioni responsive
 const odooTheme = createTheme({
@@ -602,6 +603,7 @@ function App() {
                       <Route path="/ren" element={<RENList />} />
                       <Route path="/users" element={<UsersManagement />} />
                       <Route path='/servizi' element={<ServiziList />} />
+                      <Route path='/autisti' element={<AutistiList />} />
                     </Routes>
                   </Layout>
                 </PrivateRoute>

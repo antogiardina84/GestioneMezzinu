@@ -35,50 +35,32 @@ import {
 import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/it';
 import isoWeek from 'dayjs/plugin/isoWeek';
+import weekday from 'dayjs/plugin/weekday';
+import localeData from 'dayjs/plugin/localeData';
 import { Servizio, StatoServizio, PrioritaServizio } from '../../types/Servizio';
-import { serviziService } from '../../services/serviziService';
 import ServizioDetailModal from './ServizioDetailModal';
-import FoglioLavoroGiornaliero from './FoglioLavoroGiornaliero';
 
 dayjs.extend(isoWeek);
+dayjs.extend(weekday);
+dayjs.extend(localeData);
 dayjs.locale('it');
 
-const ServiziCalendarioPlanner: React.FC = () => {
+interface ServiziCalendarioPlannerProps {
+  servizi: Servizio[];
+}
+
+const ServiziCalendarioPlanner: React.FC<ServiziCalendarioPlannerProps> = ({ servizi: propsServizi }) => {
   const [currentMonth, setCurrentMonth] = useState<Dayjs>(dayjs());
   const [servizi, setServizi] = useState<Servizio[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(null);
   const [selectedServizio, setSelectedServizio] = useState<Servizio | null>(null);
   const [showDateDetail, setShowDateDetail] = useState(false);
   const [showServizioDetail, setShowServizioDetail] = useState(false);
-  const [showStampa, setShowStampa] = useState(false);
-  const [dataStampa, setDataStampa] = useState<Dayjs | null>(null);
 
-  // Carica servizi del mese
-  const loadServizi = React.useCallback(async () => {
-    try {
-      setLoading(true);
-      const startOfMonth = currentMonth.startOf('month').toISOString();
-      const endOfMonth = currentMonth.endOf('month').toISOString();
-      
-      const response = await serviziService.getAll({
-        limit: 10000,
-        dataInizio: startOfMonth,
-        dataFine: endOfMonth,
-      });
-      
-      setServizi(response.data || []);
-    } catch (error) {
-      console.error('Errore caricamento servizi:', error);
-      setServizi([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentMonth]);
-
+  // Sincronizza servizi dalle props
   useEffect(() => {
-    loadServizi();
-  }, [loadServizi]);
+    setServizi(propsServizi);
+  }, [propsServizi]);
 
   // Naviga al mese precedente
   const handlePreviousMonth = () => {
@@ -134,8 +116,29 @@ const ServiziCalendarioPlanner: React.FC = () => {
   const generateCalendarDays = (): (Dayjs | null)[] => {
     const startOfMonth = currentMonth.startOf('month');
     const endOfMonth = currentMonth.endOf('month');
-    const startDate = startOfMonth.startOf('isoWeek');
-    const endDate = endOfMonth.endOf('isoWeek');
+    
+    // Trova il primo lunedì prima o uguale al primo del mese
+    let startDate = startOfMonth;
+    const dayOfWeek = startDate.day(); // 0 = domenica, 1 = lunedì, ..., 6 = sabato
+    
+    // Se non è lunedì, torna indietro fino a lunedì
+    if (dayOfWeek === 0) {
+      // Se è domenica, torna indietro di 6 giorni per arrivare a lunedì
+      startDate = startDate.subtract(6, 'day');
+    } else if (dayOfWeek > 1) {
+      // Se è martedì o dopo, torna indietro fino a lunedì
+      startDate = startDate.subtract(dayOfWeek - 1, 'day');
+    }
+    // Se dayOfWeek === 1 (lunedì), non fare nulla
+    
+    // Trova l'ultima domenica dopo o uguale all'ultimo del mese
+    let endDate = endOfMonth;
+    const endDayOfWeek = endDate.day();
+    
+    if (endDayOfWeek !== 0) {
+      // Se non è domenica, vai avanti fino a domenica
+      endDate = endDate.add(7 - endDayOfWeek, 'day');
+    }
 
     const days: (Dayjs | null)[] = [];
     let currentDate = startDate;
@@ -176,15 +179,6 @@ const ServiziCalendarioPlanner: React.FC = () => {
   const calendarDays = generateCalendarDays();
   const serviziDelGiorno = selectedDate ? getServiziForDate(selectedDate) : [];
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-        <Typography sx={{ ml: 2 }}>Caricamento calendario...</Typography>
-      </Box>
-    );
-  }
-
   return (
     <Box>
       {/* Header Calendario */}
@@ -203,19 +197,6 @@ const ServiziCalendarioPlanner: React.FC = () => {
           </Box>
 
           <Box display="flex" gap={1}>
-            <Tooltip title="Stampa Foglio Lavoro">
-              <Button
-                variant="outlined"
-                startIcon={<PrintIcon />}
-                onClick={() => {
-                  setDataStampa(currentMonth);
-                  setShowStampa(true);
-                }}
-                size="small"
-              >
-                Stampa
-              </Button>
-            </Tooltip>
             <Tooltip title="Mese Precedente">
               <IconButton onClick={handlePreviousMonth} color="primary">
                 <ChevronLeft />
@@ -262,9 +243,15 @@ const ServiziCalendarioPlanner: React.FC = () => {
         </Grid>
 
         {/* Griglia giorni */}
-        <Grid container spacing={1}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: 1,
+          }}
+        >
           {calendarDays.map((day, index) => {
-            if (!day) return <Grid item xs key={index} />;
+            if (!day) return <Box key={index} />;
 
             const isCurrentMonth = day.month() === currentMonth.month();
             const isToday = day.isSame(dayjs(), 'day');
@@ -272,7 +259,7 @@ const ServiziCalendarioPlanner: React.FC = () => {
             const hasServizi = serviziGiorno.length > 0;
 
             return (
-              <Grid item xs key={index}>
+              <Box key={index}>
                 <Card
                   sx={{
                     minHeight: 100,
@@ -341,10 +328,10 @@ const ServiziCalendarioPlanner: React.FC = () => {
                     )}
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
             );
           })}
-        </Grid>
+        </Box>
 
         {/* Legenda */}
         <Box mt={3} p={2} bgcolor="grey.50" borderRadius={1}>
@@ -458,7 +445,11 @@ const ServiziCalendarioPlanner: React.FC = () => {
                         <Box display="flex" alignItems="center" gap={1}>
                           <Person sx={{ fontSize: 14 }} />
                           <Typography variant="caption">
-                            {servizio.autista}
+                            {typeof servizio.autista === 'object' && 'nomeCompleto' in servizio.autista
+                              ? servizio.autista.nomeCompleto
+                              : typeof servizio.autista === 'string'
+                              ? servizio.autista
+                              : 'N/D'}
                           </Typography>
                         </Box>
                         {servizio.descrizione && (
@@ -478,26 +469,19 @@ const ServiziCalendarioPlanner: React.FC = () => {
       </Dialog>
 
       {/* Dialog: Dettaglio Servizio */}
-      <Dialog
-        open={showServizioDetail}
-        onClose={handleCloseServizioDetail}
-        maxWidth="md"
-        fullWidth
-      >
-        {selectedServizio && (
+      {selectedServizio && showServizioDetail && (
+        <Dialog
+          open={showServizioDetail}
+          onClose={handleCloseServizioDetail}
+          maxWidth="md"
+          fullWidth
+        >
           <ServizioDetailModal
             servizio={selectedServizio}
             onClose={handleCloseServizioDetail}
           />
-        )}
-      </Dialog>
-
-      {/* Dialog: Stampa Foglio Lavoro */}
-      <FoglioLavoroGiornaliero
-        open={showStampa}
-        onClose={() => setShowStampa(false)}
-        dataPreselezionata={dataStampa || undefined}
-      />
+        </Dialog>
+      )}
     </Box>
   );
 };

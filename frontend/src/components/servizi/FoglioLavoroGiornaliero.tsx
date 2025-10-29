@@ -9,7 +9,6 @@ import {
   DialogActions,
   Typography,
   Grid,
-  Divider,
   Table,
   TableBody,
   TableRow,
@@ -30,7 +29,6 @@ import {
   Print as PrintIcon,
   Close as CloseIcon,
   Assignment as AssignmentIcon,
-  CalendarToday,
   Person,
   DirectionsCar,
 } from '@mui/icons-material';
@@ -38,22 +36,47 @@ import { DatePicker } from '@mui/x-date-pickers';
 import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/it';
 import { serviziService } from '../../services/serviziService';
+import { autistiService } from '../../services/autistiService';
 import { Servizio } from '../../types/Servizio';
+import { AutistaListItem } from '../../types/Autista';
 
 interface FoglioLavoroGiornalieroProps {
-  open: boolean;
-  onClose: () => void;
-  dataPreselezionata?: Dayjs;
+  servizi: Servizio[];
 }
 
+// ============================================
+// HELPER TYPE-SAFE PER GESTIRE AUTISTA
+// ============================================
+interface AutistaPopulated {
+  _id: string;
+  nome: string;
+  cognome: string;
+}
+
+// Type guard per verificare se autista è popolato
+function isAutistaPopulated(autista: any): autista is AutistaPopulated {
+  return autista && typeof autista === 'object' && '_id' in autista;
+}
+
+// Helper per ottenere ID autista (sia string che object)
+function getAutistaId(autista: string | any): string {
+  if (typeof autista === 'string') {
+    return autista;
+  }
+  if (isAutistaPopulated(autista)) {
+    return autista._id;
+  }
+  return '';
+}
+// ============================================
+
 const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
-  open,
-  onClose,
-  dataPreselezionata,
+  servizi: propsServizi,
 }) => {
-  const [data, setData] = useState<Dayjs>(dataPreselezionata || dayjs());
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<Dayjs>(dayjs());
   const [servizi, setServizi] = useState<Servizio[]>([]);
-  const [autisti, setAutisti] = useState<string[]>([]);
+  const [autisti, setAutisti] = useState<AutistaListItem[]>([]);
   const [autistaSelezionato, setAutistaSelezionato] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [includiNote, setIncludiNote] = useState(true);
@@ -61,35 +84,45 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
   const [includiCliente, setIncludiCliente] = useState(true);
   const [includiCosti, setIncludiCosti] = useState(false);
 
-  // Carica servizi quando cambia la data
+  // Carica servizi quando cambia la data o quando viene ricevuto props
   useEffect(() => {
-    if (open && data) {
+    if (open && data && propsServizi.length > 0) {
       loadServizi();
     }
-  }, [open, data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, data, propsServizi]);
 
-  // Estrai lista autisti unici
+  // Carica autisti dal database
   useEffect(() => {
-    const autistiUnici = Array.from(
-      new Set(
-        servizi
-          .filter(s => s.autista)
-          .map(s => s.autista)
-      )
-    ).sort();
-    setAutisti(autistiUnici);
-    
-    // Preseleziona primo autista se ce n'è solo uno
-    if (autistiUnici.length === 1 && !autistaSelezionato) {
-      setAutistaSelezionato(autistiUnici[0]);
+    if (open) {
+      loadAutisti();
     }
-  }, [servizi]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const loadAutisti = async () => {
+    try {
+      const autistiFromDB = await autistiService.getListaSemplice();
+      setAutisti(autistiFromDB);
+      
+      // Se c'è un solo autista, preselezionalo
+      if (autistiFromDB.length === 1 && !autistaSelezionato) {
+        setAutistaSelezionato(autistiFromDB[0].id);
+      }
+    } catch (error) {
+      console.error('Errore caricamento autisti:', error);
+      setAutisti([]);
+    }
+  };
 
   const loadServizi = async () => {
     try {
       setLoading(true);
-      const startOfDay = data.startOf('day').toISOString();
-      const endOfDay = data.endOf('day').toISOString();
+      
+      // Formatta le date in formato YYYY-MM-DD locale senza conversione UTC
+      const dataSelezionata = data.format('YYYY-MM-DD');
+      const startOfDay = `${dataSelezionata}T00:00:00`;
+      const endOfDay = `${dataSelezionata}T23:59:59`;
       
       const response = await serviziService.getAll({
         limit: 1000,
@@ -100,7 +133,7 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
       
       const serviziDelGiorno = (response.data || []).filter(servizio => {
         const servizioDate = dayjs(servizio.dataInizio);
-        return servizioDate.format('YYYY-MM-DD') === data.format('YYYY-MM-DD');
+        return servizioDate.format('YYYY-MM-DD') === dataSelezionata;
       });
       
       setServizi(serviziDelGiorno);
@@ -112,8 +145,11 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
     }
   };
 
-  // Filtra servizi per autista selezionato
-  const serviziAutista = servizi.filter(s => s.autista === autistaSelezionato);
+  // Filtra servizi per autista selezionato (TYPE-SAFE!)
+  const serviziAutista = servizi.filter(s => {
+    if (!s.autista) return false;
+    return getAutistaId(s.autista) === autistaSelezionato;
+  });
 
   // Ordina per ora inizio
   const serviziOrdinati = [...serviziAutista].sort((a, b) => {
@@ -138,11 +174,31 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
     }, 100);
   };
 
+  const handleOpen = () => {
+    setOpen(true);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+  };
+
+  // Trova nome autista selezionato
+  const nomeAutistaSelezionato = autisti.find(a => a.id === autistaSelezionato)?.nomeCompleto || autistaSelezionato;
+
   return (
     <>
+      <Button
+        variant="contained"
+        color="primary"
+        startIcon={<PrintIcon />}
+        onClick={handleOpen}
+      >
+        Apri Foglio Lavoro
+      </Button>
+
       <Dialog
         open={open}
-        onClose={onClose}
+        onClose={handleClose}
         maxWidth="md"
         fullWidth
         className="no-print"
@@ -153,7 +209,7 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
               <AssignmentIcon color="primary" />
               <Typography variant="h6">Foglio Lavoro Giornaliero</Typography>
             </Box>
-            <IconButton onClick={onClose} size="small">
+            <IconButton onClick={handleClose} size="small">
               <CloseIcon />
             </IconButton>
           </Box>
@@ -180,20 +236,39 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
                 <InputLabel>Autista</InputLabel>
                 <Select
                   value={autistaSelezionato}
-                  label="Autista"
                   onChange={(e) => setAutistaSelezionato(e.target.value)}
-                  disabled={loading || autisti.length === 0}
+                  disabled={autisti.length === 0}
                 >
+                  <MenuItem value="">
+                    <em>Seleziona autista</em>
+                  </MenuItem>
                   {autisti.map((autista) => (
-                    <MenuItem key={autista} value={autista}>
-                      {autista}
+                    <MenuItem key={autista.id} value={autista.id}>
+                      {autista.nomeCompleto}
+                      {autista.telefono && ` - ${autista.telefono}`}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
             </Grid>
 
-            {servizi.length === 0 && !loading && (
+            {autisti.length === 0 && !loading && (
+              <Grid item xs={12}>
+                <Alert severity="warning">
+                  Nessun autista attivo trovato nel sistema
+                </Alert>
+              </Grid>
+            )}
+
+            {!autistaSelezionato && autisti.length > 0 && (
+              <Grid item xs={12}>
+                <Alert severity="info">
+                  Seleziona un autista per visualizzare i servizi programmati
+                </Alert>
+              </Grid>
+            )}
+
+            {servizi.length === 0 && !loading && autistaSelezionato && (
               <Grid item xs={12}>
                 <Alert severity="info">
                   Nessun servizio programmato per questa data
@@ -201,18 +276,10 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
               </Grid>
             )}
 
-            {autisti.length === 0 && servizi.length > 0 && (
+            {autistaSelezionato && serviziAutista.length === 0 && servizi.length > 0 && (
               <Grid item xs={12}>
                 <Alert severity="warning">
-                  Nessun autista assegnato ai servizi di questa data
-                </Alert>
-              </Grid>
-            )}
-
-            {autistaSelezionato && serviziAutista.length === 0 && (
-              <Grid item xs={12}>
-                <Alert severity="info">
-                  Nessun servizio assegnato a {autistaSelezionato} per questa data
+                  Nessun servizio trovato per l'autista selezionato in questa data
                 </Alert>
               </Grid>
             )}
@@ -220,16 +287,13 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
             {autistaSelezionato && serviziAutista.length > 0 && (
               <Grid item xs={12}>
                 <Alert severity="success">
-                  {serviziAutista.length} servizio/i trovato/i per {autistaSelezionato}
+                  Trovati {serviziAutista.length} servizio/i per {nomeAutistaSelezionato}
                 </Alert>
               </Grid>
             )}
 
             <Grid item xs={12}>
-              <Typography variant="subtitle2" gutterBottom>
-                Opzioni Stampa
-              </Typography>
-              <Stack spacing={1}>
+              <Stack direction="row" spacing={2}>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -237,7 +301,7 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
                       onChange={(e) => setIncludiNote(e.target.checked)}
                     />
                   }
-                  label="Includi note"
+                  label="Note"
                 />
                 <FormControlLabel
                   control={
@@ -246,7 +310,7 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
                       onChange={(e) => setIncludiMateriali(e.target.checked)}
                     />
                   }
-                  label="Includi materiali"
+                  label="Materiali"
                 />
                 <FormControlLabel
                   control={
@@ -255,7 +319,7 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
                       onChange={(e) => setIncludiCliente(e.target.checked)}
                     />
                   }
-                  label="Includi dati cliente"
+                  label="Cliente"
                 />
                 <FormControlLabel
                   control={
@@ -264,25 +328,22 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
                       onChange={(e) => setIncludiCosti(e.target.checked)}
                     />
                   }
-                  label="Includi costi previsti"
+                  label="Costi"
                 />
               </Stack>
             </Grid>
           </Grid>
         </DialogContent>
 
-        <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button onClick={onClose}>Annulla</Button>
-          {autisti.length > 1 && (
-            <Button
-              variant="outlined"
-              startIcon={<PrintIcon />}
-              onClick={handleStampaTuttiAutisti}
-              disabled={loading || servizi.length === 0}
-            >
-              Stampa Tutti ({autisti.length} autisti)
-            </Button>
-          )}
+        <DialogActions>
+          <Button onClick={handleClose}>Annulla</Button>
+          <Button
+            variant="outlined"
+            onClick={handleStampaTuttiAutisti}
+            disabled={servizi.length === 0}
+          >
+            Stampa Tutti
+          </Button>
           <Button
             variant="contained"
             startIcon={<PrintIcon />}
@@ -294,358 +355,314 @@ const FoglioLavoroGiornaliero: React.FC<FoglioLavoroGiornalieroProps> = ({
         </DialogActions>
       </Dialog>
 
-      {/* Contenuto da stampare */}
-      <Box className="print-only" sx={{ display: 'none' }}>
-        {(autistaSelezionato === 'TUTTI' ? autisti : [autistaSelezionato]).map((autista, idx) => {
-          const serviziPerAutista = servizi.filter(s => s.autista === autista);
-          const serviziOrdinatiPerAutista = [...serviziPerAutista].sort((a, b) => 
-            a.oraInizio.localeCompare(b.oraInizio)
-          );
-
-          if (serviziOrdinatiPerAutista.length === 0) return null;
-
-          return (
-            <Box
-              key={autista}
-              sx={{
-                pageBreakAfter: idx < autisti.length - 1 ? 'always' : 'auto',
-                padding: '20mm',
-                '@media print': {
-                  padding: '15mm',
-                }
-              }}
-            >
-              {/* Header Foglio Lavoro */}
-              <Box mb={3}>
-                <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                  <Box>
-                    <Typography variant="h4" fontWeight="bold" gutterBottom>
-                      FOGLIO DI LAVORO GIORNALIERO
-                    </Typography>
-                    <Typography variant="h6" color="text.secondary">
-                      {data.format('dddd, D MMMM YYYY').toUpperCase()}
-                    </Typography>
-                  </Box>
-                  <Box textAlign="right">
-                    <Typography variant="body2" color="text.secondary">
-                      Stampato il {dayjs().format('DD/MM/YYYY HH:mm')}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                <Divider sx={{ my: 2, borderWidth: 2, borderColor: '#714B67' }} />
-
-                {/* Info Autista */}
-                <Box bgcolor="#F5F5F5" p={2} borderRadius={1} mb={2}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <Person />
-                        <Box>
-                          <Typography variant="caption" color="text.secondary">
-                            AUTISTA
-                          </Typography>
-                          <Typography variant="h6" fontWeight="bold">
-                            {autista}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <DirectionsCar />
-                        <Box>
-                          <Typography variant="caption" color="text.secondary">
-                            AUTOVEICOLO
-                          </Typography>
-                          <Typography variant="h6" fontWeight="bold">
-                            {serviziOrdinatiPerAutista[0]?.autoveicolo?.targa || '-'}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {serviziOrdinatiPerAutista[0]?.autoveicolo?.marca}{' '}
-                            {serviziOrdinatiPerAutista[0]?.autoveicolo?.modello}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </Box>
-
-                {/* Riepilogo */}
-                <Box bgcolor="#E3F2FD" p={2} borderRadius={1}>
-                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                    RIEPILOGO GIORNATA
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={4}>
-                      <Typography variant="body2" color="text.secondary">
-                        Totale Servizi
-                      </Typography>
-                      <Typography variant="h6" fontWeight="bold">
-                        {serviziOrdinatiPerAutista.length}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Typography variant="body2" color="text.secondary">
-                        Primo Servizio
-                      </Typography>
-                      <Typography variant="h6" fontWeight="bold">
-                        {serviziOrdinatiPerAutista[0]?.oraInizio || '-'}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Typography variant="body2" color="text.secondary">
-                        Ultimo Servizio
-                      </Typography>
-                      <Typography variant="h6" fontWeight="bold">
-                        {serviziOrdinatiPerAutista[serviziOrdinatiPerAutista.length - 1]?.oraFine || '-'}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </Box>
-              </Box>
-
-              {/* Lista Servizi */}
-              {serviziOrdinatiPerAutista.map((servizio, index) => (
-                <Box
-                  key={servizio._id}
-                  mb={3}
-                  pb={3}
-                  sx={{
-                    pageBreakInside: 'avoid',
-                    borderBottom: index < serviziOrdinatiPerAutista.length - 1 ? '1px solid #E0E0E0' : 'none',
-                  }}
-                >
-                  {/* Header Servizio */}
-                  <Box bgcolor="#714B67" color="white" p={1.5} borderRadius="4px 4px 0 0">
-                    <Box display="flex" justifyContent="space-between" alignItems="center">
-                      <Typography variant="h6" fontWeight="bold">
-                        SERVIZIO #{index + 1} - {servizio.oraInizio} - {servizio.oraFine}
-                      </Typography>
-                      <Chip
-                        label={servizio.priorita}
-                        sx={{
-                          bgcolor: 'white',
-                          color: '#714B67',
-                          fontWeight: 'bold',
-                        }}
-                        size="small"
-                      />
-                    </Box>
-                  </Box>
-
-                  {/* Corpo Servizio */}
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: '0 0 4px 4px' }}>
-                    {/* Titolo e Tipo */}
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                      {servizio.titolo}
-                    </Typography>
-                    <Chip
-                      label={servizio.tipoServizio}
-                      size="small"
-                      variant="outlined"
-                      sx={{ mb: 2 }}
-                    />
-
-                    {/* Descrizione */}
-                    {servizio.descrizione && (
-                      <Box mb={2}>
-                        <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                          Descrizione:
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                          {servizio.descrizione}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {/* Luoghi */}
-                    {(servizio.luogoPartenza || servizio.luogoArrivo) && (
-                      <Box mb={2}>
-                        <Table size="small">
-                          <TableBody>
-                            {servizio.luogoPartenza && (
-                              <TableRow>
-                                <TableCell sx={{ fontWeight: 'bold', width: '120px', border: 'none' }}>
-                                  📍 PARTENZA:
-                                </TableCell>
-                                <TableCell sx={{ border: 'none' }}>
-                                  {servizio.luogoPartenza.indirizzo}
-                                  <br />
-                                  {servizio.luogoPartenza.citta} ({servizio.luogoPartenza.provincia}) - {servizio.luogoPartenza.cap}
-                                </TableCell>
-                              </TableRow>
-                            )}
-                            {servizio.luogoArrivo && (
-                              <TableRow>
-                                <TableCell sx={{ fontWeight: 'bold', border: 'none' }}>
-                                  📍 ARRIVO:
-                                </TableCell>
-                                <TableCell sx={{ border: 'none' }}>
-                                  {servizio.luogoArrivo.indirizzo}
-                                  <br />
-                                  {servizio.luogoArrivo.citta} ({servizio.luogoArrivo.provincia}) - {servizio.luogoArrivo.cap}
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </Box>
-                    )}
-
-                    {/* Cliente */}
-                    {includiCliente && servizio.cliente && servizio.cliente.nome && (
-                      <Box mb={2} bgcolor="#FFF9E6" p={1.5} borderRadius={1}>
-                        <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                          👤 CLIENTE
-                        </Typography>
-                        <Table size="small">
-                          <TableBody>
-                            <TableRow>
-                              <TableCell sx={{ fontWeight: 'bold', width: '100px', border: 'none', py: 0.5 }}>
-                                Nome:
-                              </TableCell>
-                              <TableCell sx={{ border: 'none', py: 0.5 }}>
-                                {servizio.cliente.nome}
-                              </TableCell>
-                            </TableRow>
-                            {servizio.cliente.telefono && (
-                              <TableRow>
-                                <TableCell sx={{ fontWeight: 'bold', border: 'none', py: 0.5 }}>
-                                  Telefono:
-                                </TableCell>
-                                <TableCell sx={{ border: 'none', py: 0.5 }}>
-                                  {servizio.cliente.telefono}
-                                </TableCell>
-                              </TableRow>
-                            )}
-                            {servizio.cliente.riferimento && (
-                              <TableRow>
-                                <TableCell sx={{ fontWeight: 'bold', border: 'none', py: 0.5 }}>
-                                  Riferimento:
-                                </TableCell>
-                                <TableCell sx={{ border: 'none', py: 0.5 }}>
-                                  {servizio.cliente.riferimento}
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </Box>
-                    )}
-
-                    {/* Materiali */}
-                    {includiMateriali && servizio.materiali && servizio.materiali.length > 0 && (
-                      <Box mb={2} bgcolor="#E8F5E9" p={1.5} borderRadius={1}>
-                        <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                          📦 MATERIALI DA TRASPORTARE
-                        </Typography>
-                        {servizio.materiali.map((materiale, idx) => (
-                          <Box key={idx} ml={2} mb={1}>
-                            <Typography variant="body2">
-                              • <strong>{materiale.descrizione}</strong>
-                              {materiale.quantita && ` - Quantità: ${materiale.quantita} ${materiale.unitaMisura || ''}`}
-                              {materiale.peso && ` - Peso: ${materiale.peso} kg`}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    )}
-
-                    {/* Costi Previsti */}
-                    {includiCosti && servizio.costi && (
-                      <Box mb={2} bgcolor="#FFEBEE" p={1.5} borderRadius={1}>
-                        <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                          💰 COSTI PREVISTI
-                        </Typography>
-                        <Table size="small">
-                          <TableBody>
-                            {servizio.costi.pedaggi > 0 && (
-                              <TableRow>
-                                <TableCell sx={{ border: 'none', py: 0.5 }}>Pedaggi:</TableCell>
-                                <TableCell align="right" sx={{ border: 'none', py: 0.5 }}>
-                                  € {servizio.costi.pedaggi.toFixed(2)}
-                                </TableCell>
-                              </TableRow>
-                            )}
-                            {servizio.costi.parcheggi > 0 && (
-                              <TableRow>
-                                <TableCell sx={{ border: 'none', py: 0.5 }}>Parcheggi:</TableCell>
-                                <TableCell align="right" sx={{ border: 'none', py: 0.5 }}>
-                                  € {servizio.costi.parcheggi.toFixed(2)}
-                                </TableCell>
-                              </TableRow>
-                            )}
-                            {servizio.costi.altri > 0 && (
-                              <TableRow>
-                                <TableCell sx={{ border: 'none', py: 0.5 }}>Altri:</TableCell>
-                                <TableCell align="right" sx={{ border: 'none', py: 0.5 }}>
-                                  € {servizio.costi.altri.toFixed(2)}
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </Box>
-                    )}
-
-                    {/* Note */}
-                    {includiNote && servizio.note && (
-                      <Box bgcolor="#FFF3E0" p={1.5} borderRadius={1}>
-                        <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                          📝 NOTE IMPORTANTI
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                          {servizio.note}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {/* Spazio per annotazioni */}
-                    <Box mt={2} p={2} border="1px dashed #999" borderRadius={1}>
-                      <Typography variant="caption" color="text.secondary" gutterBottom display="block">
-                        SPAZIO PER ANNOTAZIONI AUTISTA:
-                      </Typography>
-                      <Box height="60px" />
-                    </Box>
-
-                    {/* Firma */}
-                    <Box mt={2} display="flex" justifyContent="space-between">
-                      <Box width="45%">
-                        <Typography variant="caption" color="text.secondary">
-                          Km Iniziali: _____________
-                        </Typography>
-                      </Box>
-                      <Box width="45%">
-                        <Typography variant="caption" color="text.secondary">
-                          Km Finali: _____________
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Paper>
-                </Box>
-              ))}
-
-              {/* Footer */}
-              <Box mt={4} pt={2} borderTop="2px solid #714B67">
-                <Grid container spacing={2}>
+      {/* Area di stampa */}
+      <Box className="print-only" sx={{ p: 3 }}>
+        {autistaSelezionato && serviziOrdinati.map((servizio, index) => (
+          <Box key={servizio._id} mb={index < serviziOrdinati.length - 1 ? 4 : 0}>
+            <Paper elevation={0} sx={{ border: '2px solid #714B67', p: 2 }}>
+              {/* Header */}
+              <Box mb={2} pb={2} borderBottom="2px solid #714B67">
+                <Grid container spacing={2} alignItems="center">
                   <Grid item xs={6}>
-                    <Typography variant="body2" color="text.secondary">
-                      Firma Autista
+                    <Typography variant="h5" fontWeight="bold" color="primary">
+                      FOGLIO LAVORO GIORNALIERO
                     </Typography>
-                    <Box mt={1} height="40px" borderBottom="1px solid #999" />
                   </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="body2" color="text.secondary">
-                      Data e Ora
+                  <Grid item xs={6} textAlign="right">
+                    <Typography variant="h6">
+                      {data.format('DD/MM/YYYY')}
                     </Typography>
-                    <Box mt={1} height="40px" borderBottom="1px solid #999" />
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Servizio #{index + 1} di {serviziOrdinati.length}
+                    </Typography>
                   </Grid>
                 </Grid>
               </Box>
-            </Box>
-          );
-        })}
+
+              {/* Info Autista e Veicolo */}
+              <Grid container spacing={2} mb={2}>
+                <Grid item xs={6}>
+                  <Box bgcolor="#F5F5F5" p={1.5} borderRadius={1}>
+                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                      <Person fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />
+                      AUTISTA
+                    </Typography>
+                    <Typography variant="body1" fontWeight="bold">
+                      {nomeAutistaSelezionato}
+                    </Typography>
+                    {autisti.find(a => a.id === autistaSelezionato)?.telefono && (
+                      <Typography variant="body2" color="text.secondary">
+                        Tel: {autisti.find(a => a.id === autistaSelezionato)?.telefono}
+                      </Typography>
+                    )}
+                  </Box>
+                </Grid>
+                <Grid item xs={6}>
+                  <Box bgcolor="#F5F5F5" p={1.5} borderRadius={1}>
+                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                      <DirectionsCar fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />
+                      VEICOLO
+                    </Typography>
+                    <Typography variant="body1" fontWeight="bold">
+                      {typeof servizio.autoveicolo === 'object' 
+                        ? `${servizio.autoveicolo.targa} - ${servizio.autoveicolo.marca} ${servizio.autoveicolo.modello}`
+                        : 'N/D'}
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+
+              {/* Dettagli Servizio */}
+              <Box mb={2} bgcolor="#E3F2FD" p={1.5} borderRadius={1}>
+                <Typography variant="h6" fontWeight="bold" gutterBottom>
+                  📋 {servizio.titolo}
+                </Typography>
+                
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Orario
+                    </Typography>
+                    <Typography variant="body1" fontWeight="bold">
+                      {servizio.oraInizio} - {servizio.oraFine}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Tipo
+                    </Typography>
+                    <Typography variant="body1" fontWeight="bold">
+                      {servizio.tipoServizio}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Stato
+                    </Typography>
+                    <Chip 
+                      label={servizio.stato} 
+                      size="small"
+                      color={servizio.stato === 'Programmato' ? 'primary' : 'warning'}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Priorità
+                    </Typography>
+                    <Chip 
+                      label={servizio.priorita} 
+                      size="small"
+                      color={
+                        servizio.priorita === 'Urgente' ? 'error' :
+                        servizio.priorita === 'Alta' ? 'warning' : 'default'
+                      }
+                    />
+                  </Grid>
+                </Grid>
+
+                {servizio.descrizione && (
+                  <Box mt={1.5} pt={1.5} borderTop="1px solid rgba(0,0,0,0.1)">
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                      {servizio.descrizione}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+
+              {/* Luoghi */}
+              {(servizio.luogoPartenza || servizio.luogoArrivo) && (
+                <Box mb={2} bgcolor="#FFF3E0" p={1.5} borderRadius={1}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    🗺️ PERCORSO
+                  </Typography>
+                  <Table size="small">
+                    <TableBody>
+                      {servizio.luogoPartenza && (
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 'bold', width: '100px', border: 'none' }}>
+                            📍 PARTENZA:
+                          </TableCell>
+                          <TableCell sx={{ border: 'none' }}>
+                            {servizio.luogoPartenza.indirizzo}
+                            <br />
+                            {servizio.luogoPartenza.citta} ({servizio.luogoPartenza.provincia}) - {servizio.luogoPartenza.cap}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {servizio.luogoArrivo && (
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 'bold', border: 'none' }}>
+                            📍 ARRIVO:
+                          </TableCell>
+                          <TableCell sx={{ border: 'none' }}>
+                            {servizio.luogoArrivo.indirizzo}
+                            <br />
+                            {servizio.luogoArrivo.citta} ({servizio.luogoArrivo.provincia}) - {servizio.luogoArrivo.cap}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
+
+              {/* Cliente */}
+              {includiCliente && servizio.cliente && servizio.cliente.nome && (
+                <Box mb={2} bgcolor="#FFF9E6" p={1.5} borderRadius={1}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    👤 CLIENTE
+                  </Typography>
+                  <Table size="small">
+                    <TableBody>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 'bold', width: '100px', border: 'none', py: 0.5 }}>
+                          Nome:
+                        </TableCell>
+                        <TableCell sx={{ border: 'none', py: 0.5 }}>
+                          {servizio.cliente.nome}
+                        </TableCell>
+                      </TableRow>
+                      {servizio.cliente.telefono && (
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 'bold', border: 'none', py: 0.5 }}>
+                            Telefono:
+                          </TableCell>
+                          <TableCell sx={{ border: 'none', py: 0.5 }}>
+                            {servizio.cliente.telefono}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {servizio.cliente.riferimento && (
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 'bold', border: 'none', py: 0.5 }}>
+                            Riferimento:
+                          </TableCell>
+                          <TableCell sx={{ border: 'none', py: 0.5 }}>
+                            {servizio.cliente.riferimento}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
+
+              {/* Materiali */}
+              {includiMateriali && servizio.materiali && servizio.materiali.length > 0 && (
+                <Box mb={2} bgcolor="#E8F5E9" p={1.5} borderRadius={1}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    📦 MATERIALI DA TRASPORTARE
+                  </Typography>
+                  {servizio.materiali.map((materiale, idx) => (
+                    <Box key={idx} ml={2} mb={1}>
+                      <Typography variant="body2">
+                        • <strong>{materiale.descrizione}</strong>
+                        {materiale.quantita && ` - Quantità: ${materiale.quantita} ${materiale.unitaMisura || ''}`}
+                        {materiale.peso && ` - Peso: ${materiale.peso} kg`}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+
+              {/* Costi Previsti */}
+              {includiCosti && servizio.costi && (
+                <Box mb={2} bgcolor="#FFEBEE" p={1.5} borderRadius={1}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    💰 COSTI PREVISTI
+                  </Typography>
+                  <Table size="small">
+                    <TableBody>
+                      {servizio.costi.pedaggi > 0 && (
+                        <TableRow>
+                          <TableCell sx={{ border: 'none', py: 0.5 }}>Pedaggi:</TableCell>
+                          <TableCell align="right" sx={{ border: 'none', py: 0.5 }}>
+                            € {servizio.costi.pedaggi.toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {servizio.costi.parcheggi > 0 && (
+                        <TableRow>
+                          <TableCell sx={{ border: 'none', py: 0.5 }}>Parcheggi:</TableCell>
+                          <TableCell align="right" sx={{ border: 'none', py: 0.5 }}>
+                            € {servizio.costi.parcheggi.toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {servizio.costi.altri > 0 && (
+                        <TableRow>
+                          <TableCell sx={{ border: 'none', py: 0.5 }}>Altri:</TableCell>
+                          <TableCell align="right" sx={{ border: 'none', py: 0.5 }}>
+                            € {servizio.costi.altri.toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
+
+              {/* Note */}
+              {includiNote && servizio.note && (
+                <Box bgcolor="#FFF3E0" p={1.5} borderRadius={1}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    📝 NOTE IMPORTANTI
+                  </Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                    {servizio.note}
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Spazio per annotazioni */}
+              <Box mt={2} p={2} border="1px dashed #999" borderRadius={1}>
+                <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+                  SPAZIO PER ANNOTAZIONI AUTISTA:
+                </Typography>
+                <Box height="60px" />
+              </Box>
+
+              {/* Firma */}
+              <Box mt={2} display="flex" justifyContent="space-between">
+                <Box width="45%">
+                  <Typography variant="caption" color="text.secondary">
+                    Km Iniziali: _____________
+                  </Typography>
+                </Box>
+                <Box width="45%">
+                  <Typography variant="caption" color="text.secondary">
+                    Km Finali: _____________
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+
+            {/* Page break tra servizi */}
+            {index < serviziOrdinati.length - 1 && (
+              <Box sx={{ pageBreakAfter: 'always' }} />
+            )}
+          </Box>
+        ))}
+
+        {/* Footer finale */}
+        {autistaSelezionato && serviziOrdinati.length > 0 && (
+          <Box mt={4} pt={2} borderTop="2px solid #714B67">
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Firma Autista
+                </Typography>
+                <Box mt={1} height="40px" borderBottom="1px solid #999" />
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Data e Ora
+                </Typography>
+                <Box mt={1} height="40px" borderBottom="1px solid #999" />
+              </Grid>
+            </Grid>
+          </Box>
+        )}
       </Box>
 
       <style>

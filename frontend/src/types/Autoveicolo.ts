@@ -1,4 +1,6 @@
-// src/types/Autoveicolo.ts - VERSIONE AGGIORNATA CON PASS ZTL
+// frontend/src/types/Autoveicolo.ts - VERSIONE CORRETTA
+import { Autista } from './Autista';
+
 export interface Autoveicolo {
   _id: string;
   marca: string;
@@ -25,13 +27,15 @@ export interface Autoveicolo {
     dataDemolizione: Date;
   };
   telaio?: string;
-  autista?: string;
+  // CAMPO CANONICO
+  autistaAssegnato?: Autista | string; 
+  // CAMPO LEGACY/ALIAS per risolvere TS2339
+  autista?: Autista | string; 
   portataMax?: number;
   autCat1?: string;
   autCat2?: string;
   autCat3?: string;
   passZTL: boolean;
-  // NUOVO CAMPO PER LA SCADENZA DEL PASS ZTL
   dataScadenzaPassZTL?: Date;
   autRifiuti: string[];
   note?: string;
@@ -67,6 +71,8 @@ export interface IntervalliRevisione {
   revisioniSuccessive: number; // anni
 }
 
+// --- DICHIARAZIONI COSTANTI SPOSTATE PRIMA DELL'UTILIZZO (Fix: TS2448/TS2454) ---
+
 // Costanti per i tipi di carrozzeria
 export const TIPI_CARROZZERIA_REVISIONE_ANNUALE: TipoCarrozzeriaRevisioneAnnuale[] = [
   'Trattore stradale > 3.5 ton',
@@ -83,10 +89,13 @@ export const TIPI_CARROZZERIA_REVISIONE_BIENNALE: TipoCarrozzeriaRevisioneBienna
 ];
 
 // Tutti i tipi di carrozzeria disponibili
+// Questa costante ORA usa le due precedenti DOPO la loro dichiarazione.
 export const TUTTI_TIPI_CARROZZERIA = [
   ...TIPI_CARROZZERIA_REVISIONE_BIENNALE,
   ...TIPI_CARROZZERIA_REVISIONE_ANNUALE
 ] as const;
+
+// --- FUNZIONI HELPER ---
 
 // Funzione helper per determinare se il veicolo ha un motore
 export const isMotorVehicle = (tipoCarrozzeria: Autoveicolo['tipoCarrozzeria']): boolean => {
@@ -98,7 +107,8 @@ export const getIntervalliRevisione = (tipoCarrozzeria: Autoveicolo['tipoCarrozz
   if (TIPI_CARROZZERIA_REVISIONE_ANNUALE.includes(tipoCarrozzeria as TipoCarrozzeriaRevisioneAnnuale)) {
     return { primaRevisione: 1, revisioniSuccessive: 1 };
   }
-  return { primaRevisione: 4, revisioniSuccessive: 2 };
+  // Sebbene TypeScript non lo sappia, qui l'uso è sicuro dopo la correzione dell'ordine di dichiarazione
+  return { primaRevisione: 4, revisioniSuccessive: 2 }; 
 };
 
 // Funzione helper per calcolare la prossima revisione
