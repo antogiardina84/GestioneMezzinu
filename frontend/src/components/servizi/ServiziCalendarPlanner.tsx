@@ -1,0 +1,515 @@
+// src/components/servizi/ServiziCalendarioPlanner.tsx
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Paper,
+  Typography,
+  IconButton,
+  Grid,
+  Card,
+  CardContent,
+  Chip,
+  Dialog,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  ListItemIcon,
+  Divider,
+  Badge,
+  CircularProgress,
+  Button,
+  Tooltip,
+} from '@mui/material';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Today,
+  Event,
+  AccessTime,
+  DirectionsCar,
+  Person,
+  Close as CloseIcon,
+  Print as PrintIcon,
+} from '@mui/icons-material';
+import dayjs, { Dayjs } from 'dayjs';
+import 'dayjs/locale/it';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import weekday from 'dayjs/plugin/weekday';
+import localeData from 'dayjs/plugin/localeData';
+import { Servizio, StatoServizio, PrioritaServizio } from '../../types/Servizio';
+import { AutistaListItem } from '../../types/Autista';
+import ServizioDetailModal from './ServizioDetailModal';
+
+dayjs.extend(isoWeek);
+dayjs.extend(weekday);
+dayjs.extend(localeData);
+dayjs.locale('it');
+
+interface ServiziCalendarioPlannerProps {
+  servizi: Servizio[];
+}
+
+// Helper per estrarre il nome dell'autista
+function getAutistaName(autista: string | AutistaListItem | undefined): string {
+  if (!autista) return 'N/D';
+  
+  if (typeof autista === 'string') {
+    return autista;
+  }
+  
+  if (autista && typeof autista === 'object') {
+    if ('nomeCompleto' in autista && autista.nomeCompleto) {
+      return autista.nomeCompleto;
+    }
+    if ('nome' in autista && 'cognome' in autista) {
+      return `${autista.nome} ${autista.cognome}`.trim();
+    }
+  }
+  
+  return 'N/D';
+}
+
+const ServiziCalendarioPlanner: React.FC<ServiziCalendarioPlannerProps> = ({ servizi: propsServizi }) => {
+  const [currentMonth, setCurrentMonth] = useState<Dayjs>(dayjs());
+  const [servizi, setServizi] = useState<Servizio[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Dayjs | null>(null);
+  const [selectedServizio, setSelectedServizio] = useState<Servizio | null>(null);
+  const [showDateDetail, setShowDateDetail] = useState(false);
+  const [showServizioDetail, setShowServizioDetail] = useState(false);
+
+  // Sincronizza servizi dalle props
+  useEffect(() => {
+    setServizi(propsServizi);
+  }, [propsServizi]);
+
+  // Naviga al mese precedente
+  const handlePreviousMonth = () => {
+    setCurrentMonth(currentMonth.subtract(1, 'month'));
+  };
+
+  // Naviga al mese successivo
+  const handleNextMonth = () => {
+    setCurrentMonth(currentMonth.add(1, 'month'));
+  };
+
+  // Torna a oggi
+  const handleToday = () => {
+    setCurrentMonth(dayjs());
+  };
+
+  // Ottieni servizi per una data specifica
+  const getServiziForDate = (date: Dayjs): Servizio[] => {
+    return servizi.filter(servizio => {
+      const servizioDate = dayjs(servizio.dataInizio);
+      return servizioDate.format('YYYY-MM-DD') === date.format('YYYY-MM-DD');
+    });
+  };
+
+  // Click su una data del calendario
+  const handleDateClick = (date: Dayjs) => {
+    const serviziGiorno = getServiziForDate(date);
+    if (serviziGiorno.length > 0) {
+      setSelectedDate(date);
+      setShowDateDetail(true);
+    }
+  };
+
+  // Click su un servizio nella lista
+  const handleServizioClick = (servizio: Servizio) => {
+    setSelectedServizio(servizio);
+    setShowServizioDetail(true);
+  };
+
+  // Chiudi dialog lista servizi
+  const handleCloseDateDetail = () => {
+    setShowDateDetail(false);
+    setSelectedDate(null);
+  };
+
+  // Chiudi dialog dettaglio servizio
+  const handleCloseServizioDetail = () => {
+    setShowServizioDetail(false);
+    setSelectedServizio(null);
+  };
+
+  // Genera i giorni del mese
+  const generateCalendarDays = (): (Dayjs | null)[] => {
+    const startOfMonth = currentMonth.startOf('month');
+    const endOfMonth = currentMonth.endOf('month');
+    
+    // Trova il primo lunedì prima o uguale al primo del mese
+    let startDate = startOfMonth;
+    const dayOfWeek = startDate.day(); // 0 = domenica, 1 = lunedì, ..., 6 = sabato
+    
+    // Se non è lunedì, torna indietro fino a lunedì
+    if (dayOfWeek === 0) {
+      // Se è domenica, torna indietro di 6 giorni per arrivare a lunedì
+      startDate = startDate.subtract(6, 'day');
+    } else if (dayOfWeek > 1) {
+      // Se è martedì o dopo, torna indietro fino a lunedì
+      startDate = startDate.subtract(dayOfWeek - 1, 'day');
+    }
+    // Se dayOfWeek === 1 (lunedì), non fare nulla
+    
+    // Trova l'ultima domenica dopo o uguale all'ultimo del mese
+    let endDate = endOfMonth;
+    const endDayOfWeek = endDate.day();
+    
+    if (endDayOfWeek !== 0) {
+      // Se non è domenica, vai avanti fino a domenica
+      endDate = endDate.add(7 - endDayOfWeek, 'day');
+    }
+
+    const days: (Dayjs | null)[] = [];
+    let currentDate = startDate;
+
+    while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+      days.push(currentDate);
+      currentDate = currentDate.add(1, 'day');
+    }
+
+    return days;
+  };
+
+  // Colori per stati
+  const getStatoColor = (stato: StatoServizio): string => {
+    switch (stato) {
+      case 'Programmato': return '#2196F3';
+      case 'In corso': return '#FF9800';
+      case 'Completato': return '#4CAF50';
+      case 'Annullato': return '#9E9E9E';
+      case 'Posticipato': return '#FFC107';
+      default: return '#9E9E9E';
+    }
+  };
+
+  const getPrioritaColor = (priorita: PrioritaServizio): string => {
+    switch (priorita) {
+      case 'Urgente': return '#F44336';
+      case 'Alta': return '#FF9800';
+      case 'Media': return '#2196F3';
+      case 'Bassa': return '#4CAF50';
+      default: return '#9E9E9E';
+    }
+  };
+
+  // Rendering giorni settimana
+  const weekDays = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+
+  const calendarDays = generateCalendarDays();
+  const serviziDelGiorno = selectedDate ? getServiziForDate(selectedDate) : [];
+
+  return (
+    <Box>
+      {/* Header Calendario */}
+      <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          <Box display="flex" alignItems="center" gap={2}>
+            <Event color="primary" sx={{ fontSize: 32 }} />
+            <Box>
+              <Typography variant="h5" fontWeight={600}>
+                {currentMonth.format('MMMM YYYY')}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {servizi.length} servizi questo mese
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box display="flex" gap={1}>
+            <Tooltip title="Mese Precedente">
+              <IconButton onClick={handlePreviousMonth} color="primary">
+                <ChevronLeft />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Oggi">
+              <Button
+                variant="outlined"
+                startIcon={<Today />}
+                onClick={handleToday}
+                size="small"
+              >
+                Oggi
+              </Button>
+            </Tooltip>
+            <Tooltip title="Mese Successivo">
+              <IconButton onClick={handleNextMonth} color="primary">
+                <ChevronRight />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
+      </Paper>
+
+      {/* Calendario */}
+      <Paper elevation={2} sx={{ p: 2 }}>
+        {/* Intestazione giorni settimana */}
+        <Grid container spacing={1} sx={{ mb: 1 }}>
+          {weekDays.map((day) => (
+            <Grid item xs key={day}>
+              <Box
+                sx={{
+                  textAlign: 'center',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  color: 'text.secondary',
+                  py: 1,
+                }}
+              >
+                {day}
+              </Box>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Griglia giorni */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: 1,
+          }}
+        >
+          {calendarDays.map((day, index) => {
+            if (!day) return <Box key={index} />;
+
+            const isCurrentMonth = day.month() === currentMonth.month();
+            const isToday = day.isSame(dayjs(), 'day');
+            const serviziGiorno = getServiziForDate(day);
+            const hasServizi = serviziGiorno.length > 0;
+
+            return (
+              <Box key={index}>
+                <Card
+                  sx={{
+                    minHeight: 100,
+                    cursor: hasServizi ? 'pointer' : 'default',
+                    opacity: isCurrentMonth ? 1 : 0.4,
+                    border: isToday ? '2px solid #714B67' : '1px solid #E0E0E0',
+                    backgroundColor: hasServizi ? '#F5F5F5' : 'white',
+                    '&:hover': hasServizi ? {
+                      backgroundColor: '#EEEEEE',
+                      boxShadow: 2,
+                    } : {},
+                  }}
+                  onClick={() => hasServizi && handleDateClick(day)}
+                >
+                  <CardContent sx={{ p: 1 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                      <Typography
+                        variant="body2"
+                        fontWeight={isToday ? 700 : 500}
+                        color={isToday ? 'primary' : 'text.primary'}
+                      >
+                        {day.format('D')}
+                      </Typography>
+                      {hasServizi && (
+                        <Badge badgeContent={serviziGiorno.length} color="primary" />
+                      )}
+                    </Box>
+                    {hasServizi && (
+                      <Box>
+                        {serviziGiorno.slice(0, 3).map((servizio, idx) => (
+                          <Chip
+                            key={idx}
+                            label={servizio.titolo}
+                            size="small"
+                            sx={{
+                              fontSize: '0.65rem',
+                              height: '18px',
+                              mb: 0.5,
+                              width: '100%',
+                              backgroundColor: getStatoColor(servizio.stato),
+                              color: 'white',
+                              '& .MuiChip-label': {
+                                px: 0.5,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              },
+                            }}
+                          />
+                        ))}
+                        {serviziGiorno.length > 3 && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontSize: '0.65rem',
+                              color: 'text.secondary',
+                              textAlign: 'center',
+                            }}
+                          >
+                            +{serviziGiorno.length - 3}
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </Box>
+            );
+          })}
+        </Box>
+
+        {/* Legenda */}
+        <Box mt={3} p={2} bgcolor="grey.50" borderRadius={1}>
+          <Typography variant="subtitle2" gutterBottom fontWeight={600}>
+            Legenda Stati
+          </Typography>
+          <Box display="flex" gap={2} flexWrap="wrap">
+            <Chip
+              label="Programmato"
+              size="small"
+              sx={{ backgroundColor: getStatoColor('Programmato'), color: 'white' }}
+            />
+            <Chip
+              label="In corso"
+              size="small"
+              sx={{ backgroundColor: getStatoColor('In corso'), color: 'white' }}
+            />
+            <Chip
+              label="Completato"
+              size="small"
+              sx={{ backgroundColor: getStatoColor('Completato'), color: 'white' }}
+            />
+            <Chip
+              label="Annullato"
+              size="small"
+              sx={{ backgroundColor: getStatoColor('Annullato'), color: 'white' }}
+            />
+          </Box>
+        </Box>
+      </Paper>
+
+      {/* Dialog: Lista Servizi del Giorno */}
+      <Dialog
+        open={showDateDetail}
+        onClose={handleCloseDateDetail}
+        maxWidth="md"
+        fullWidth
+      >
+        <Box sx={{ p: 2, borderBottom: '1px solid #E0E0E0' }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Box>
+              <Typography variant="h6" fontWeight={600}>
+                Servizi del {selectedDate?.format('DD MMMM YYYY')}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {serviziDelGiorno.length} {serviziDelGiorno.length === 1 ? 'servizio' : 'servizi'}
+              </Typography>
+            </Box>
+            <IconButton onClick={handleCloseDateDetail} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </Box>
+
+        <List sx={{ p: 0 }}>
+          {serviziDelGiorno.map((servizio, index) => (
+            <React.Fragment key={servizio._id}>
+              {index > 0 && <Divider />}
+              <ListItem disablePadding>
+                <ListItemButton onClick={() => handleServizioClick(servizio)}>
+                  <ListItemIcon>
+                    <Box
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 1,
+                        backgroundColor: getStatoColor(servizio.stato),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                      }}
+                    >
+                      <Event />
+                    </Box>
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                        <Typography variant="body1" fontWeight={600}>
+                          {servizio.titolo}
+                        </Typography>
+                        <Chip
+                          label={servizio.stato}
+                          size="small"
+                          sx={{
+                            backgroundColor: getStatoColor(servizio.stato),
+                            color: 'white',
+                            fontWeight: 600,
+                          }}
+                        />
+                        <Chip
+                          label={servizio.priorita}
+                          size="small"
+                          variant="outlined"
+                          sx={{
+                            borderColor: getPrioritaColor(servizio.priorita),
+                            color: getPrioritaColor(servizio.priorita),
+                          }}
+                        />
+                      </Box>
+                    }
+                    secondary={
+                      <Box>
+                        <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                          <AccessTime sx={{ fontSize: 14 }} />
+                          <Typography variant="caption">
+                            {servizio.oraInizio} - {servizio.oraFine}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            •
+                          </Typography>
+                          <Typography variant="caption">
+                            {servizio.tipoServizio}
+                          </Typography>
+                        </Box>
+                        <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                          <DirectionsCar sx={{ fontSize: 14 }} />
+                          <Typography variant="caption">
+                            {servizio.autoveicolo?.targa} - {servizio.autoveicolo?.marca} {servizio.autoveicolo?.modello}
+                          </Typography>
+                        </Box>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Person sx={{ fontSize: 14 }} />
+                          <Typography variant="caption">
+                            {getAutistaName(servizio.autista)}
+                          </Typography>
+                        </Box>
+                        {servizio.descrizione && (
+                          <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
+                            {servizio.descrizione.substring(0, 100)}
+                            {servizio.descrizione.length > 100 ? '...' : ''}
+                          </Typography>
+                        )}
+                      </Box>
+                    }
+                  />
+                </ListItemButton>
+              </ListItem>
+            </React.Fragment>
+          ))}
+        </List>
+      </Dialog>
+
+      {/* Dialog: Dettaglio Servizio */}
+      {selectedServizio && showServizioDetail && (
+        <Dialog
+          open={showServizioDetail}
+          onClose={handleCloseServizioDetail}
+          maxWidth="md"
+          fullWidth
+        >
+          <ServizioDetailModal
+            servizio={selectedServizio}
+            onClose={handleCloseServizioDetail}
+          />
+        </Dialog>
+      )}
+    </Box>
+  );
+};
+
+export default ServiziCalendarioPlanner;
