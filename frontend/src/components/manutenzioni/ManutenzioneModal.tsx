@@ -206,7 +206,11 @@ const ManutenzioneModal: React.FC<ManutenzioneModalProps> = ({
               <Autocomplete
                 options={autoveicoli}
                 getOptionLabel={(option) => `${option.targa} - ${option.marca} ${option.modello}`}
-                value={autoveicoli.find(auto => auto._id === (formData.autoveicolo as any)?._id || formData.autoveicolo) || null}
+                value={autoveicoli.find(auto => 
+                  auto._id === (typeof formData.autoveicolo === 'object' 
+                    ? (formData.autoveicolo as any)?._id 
+                    : formData.autoveicolo)
+                ) || null}
                 onChange={(_, newValue) => handleChange('autoveicolo', newValue?._id)}
                 renderInput={(params) => (
                   <TextField {...params} label="Autoveicolo *" fullWidth />
